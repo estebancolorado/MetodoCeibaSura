@@ -1,0 +1,16 @@
+# <!-- Powered by BMAD™ Core -->
+bundle:
+  name: Equipo de desarrollo Ceiba por medio de agentes AI
+  icon: 🎯
+  description: Equipo dedicado al desarrollo de aplicaciones fullstack.
+  # Excluir bmad-orchestrator para equipos Ceiba
+  excludeOrchestrator: true
+agents:
+  - sm # Project Manager para planificación
+  - dev # Arquitecto para diseño del sistema
+  - peer-reviewer # QA para pruebas
+  - architect # Arquitecto para diseño del sistema
+  - po # Product Owner para gestión de producto
+workflows:
+  - greenfield-fullstack.yaml
+  - brownfield-fullstack.yaml
