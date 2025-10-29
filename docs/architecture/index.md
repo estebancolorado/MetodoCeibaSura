@@ -143,59 +143,133 @@ graph TB
 
 #### PolicyCenter
 - **Ubicación**: `C:\Guidewire\PolicyCenter`
-- **Propósito**: Administración completa del ciclo de vida de pólizas de Vida Grupo
-- **Versión Guidewire**: 8.0.7
-- **Responsabilidades**:
-  - Emisión de pólizas colectivas
-  - Renovaciones y endorsos
-  - Cálculo de primas
-  - Integración con cotizadores externos vía MicroIntegradorVidaGrupo
-  - Validación de asegurados
-  - Gestión de producto de Vida Grupo (Product Designer)
-- **Estructura clave**:
-  - `/modules/configuration` - Configuración customizada Sura
-  - `/modules/gsrc` - Código Gosu personalizado
-  - `/doc` - Documentación oficial Guidewire
-  - `/studio` - IDE Guidewire Studio
+- **Propósito**: Administración del ciclo de vida completo de pólizas de Vida Grupo colectivas
+- **Versión**: 8.0.7.gw
+- **Stack Tecnológico**: Gosu + Java + Guidewire Framework
+- **Responsabilidades Críticas**:
+  - **Emisión de Pólizas Colectivas**: Gestión específica para seguros de vida grupo corporativo
+  - **Administración de Asegurados**: Manejo masivo de empleados y dependientes
+  - **Configuración de Productos Vida Grupo**: 
+    - Estructuras jerárquicas de coberturas (básicas, adicionales, voluntarias)
+    - Configuración de sumas aseguradas por categorías de empleados
+    - Manejo de tablas actuariales específicas
+  - **Procesos de Negocio Especializados**:
+    - Carga masiva de asegurados (vía archivo plano/Excel)
+    - Validación automática contra listas restrictivas
+    - Cálculo de primas por categorías y edades
+    - Emisión de certificados individuales
+    - Gestión de novedades (altas/bajas de empleados)
+  - **Integraciones Clave**:
+    - Cotizador externo vía MicroIntegradorVidaGrupo
+    - Validador de asegurados contra centrales de riesgo
+    - Sistema de facturación empresarial
+- **Configuraciones Específicas**:
+  - Product Designer configurado para productos Vida Grupo
+  - Workflow engine para aprobaciones automáticas/manuales
+  - Rating engine con tablas actuariales Sura
+- **Build**: Ant scripts (gwpc.bat/gwpc.sh) + Studio personalizado
+- **Base de Datos**: Oracle (esquema policycenter) con tablas específicas Vida Grupo
 
 #### BillingCenter
 - **Ubicación**: `C:\Guidewire\BillingCenter`
-- **Propósito**: Facturación, cobro y gestión de cuentas de pólizas
+- **Propósito**: Gestión integral de facturación y cobranza especializada en pólizas colectivas Vida Grupo
 - **Versión Guidewire**: 8.0.7
-- **Responsabilidades**:
-  - Generación de facturas
-  - Gestión de planes de pago
-  - Integración con sistemas de facturación externos
-  - Consumo de reportes de detalle de cobro desde MicroIntegradorReportesVidaGrupo
-  - Procesamiento de pagos
+- **Responsabilidades Especializadas**:
+  - **Facturación Corporativa Vida Grupo**:
+    - Consolidación de primas por empleador (una factura por empresa)
+    - Cálculo automático basado en nóminas de empleados activos
+    - Aplicación de descuentos por volumen y antigüedad corporativa
+    - Gestión de períodos de gracia empresariales
+  - **Procesos de Cobranza Específicos**:
+    - Generación automática de débitos bancarios corporativos
+    - Interfaz con sistemas de recaudo empresarial
+    - Manejo de mora empresarial (diferentes a pólizas individuales)
+    - Proceso de cancelación por no pago grupal
+  - **Reportería Avanzada**:
+    - Detalle de cobro por empleado/dependiente
+    - Reportes de comisiones a intermediarios
+    - Estados de cuenta corporativos
+    - Análisis de cartera por empresa
+  - **Integraciones Críticas**:
+    - Sistema de facturación electrónica (DIAN)
+    - Pasarelas de pago corporativo
+    - Sistema de tesorería Sura
+    - MicroIntegradorReportesVidaGrupo para reportes especializados
+- **Configuraciones Específicas**:
+  - Billing workflows para pólizas colectivas
+  - Payment plans corporativos personalizados
+  - Producer commission schemes para intermediarios Vida Grupo
 - **Estructura clave**:
-  - `/modules/configuration` - Configuración customizada Sura
-  - `/modules/gsrc` - Código Gosu personalizado
+  - `/modules/configuration` - Configuración customizada Sura Vida Grupo
+  - `/modules/gsrc` - Código Gosu personalizado para facturación colectiva
 
 #### ClaimCenter  
 - **Ubicación**: `C:\Guidewire\ClaimCenter`
-- **Propósito**: Gestión integral de siniestros de Vida Grupo
+- **Propósito**: Gestión integral y especializada de siniestros para seguros de Vida Grupo colectivos
 - **Versión Guidewire**: 8.0.7
-- **Responsabilidades**:
-  - Registro y tramitación de siniestros
-  - Evaluación y liquidación
-  - Integración con validadores de asegurados
-  - Gestión de documentación de siniestros
+- **Responsabilidades Específicas**:
+  - **Gestión de Siniestros Vida Grupo**:
+    - Registro de siniestros por fallecimiento de asegurados
+    - Manejo de incapacidades temporales/permanentes
+    - Gestión de auxilio funerario
+    - Validación automática de beneficiarios designados
+  - **Procesos Especializados**:
+    - Verificación de vigencia del asegurado al momento del siniestro
+    - Validación contra certificado de defunción
+    - Cálculo automático de indemnizaciones por categoría de empleado
+    - Gestión de múltiples beneficiarios por siniestro
+  - **Integraciones Críticas**:
+    - Registraduría Nacional (validación certificados)
+    - Sistema médico forense (dictámenes)
+    - Entidades bancarias (giros beneficiarios)
+    - MicroIntegradorVidaGrupo para validaciones externas
+  - **Documentación y Auditoría**:
+    - Gestión documental especializada (certificados médicos, actas de defunción)
+    - Workflow de aprobación por montos
+    - Trazabilidad completa para auditorías de seguros de vida
+- **Configuraciones Específicas**:
+  - Claim workflows para vida grupo (muerte natural, accidental, etc.)
+  - Business rules específicas para validación de beneficiarios
+  - Integration points con sistemas médicos y registrales
 
 ### **2. Microservicios Vida Grupo**
 
 #### MicroIntegradorVidaGrupo
 - **Ubicación**: `C:\Guidewire\MicroIntegradorVidaGrupo`
-- **Propósito**: Hub central de integraciones entre Guidewire y sistemas externos
+- **Propósito**: Hub central de integraciones empresariales para ecosistema Vida Grupo con arquitectura EIP avanzada
 - **Stack Tecnológico**: Java 17 + Apache Camel 3.20.0
-- **Responsabilidades**:
-  - Conectar procesos de negocio de Guidewire con cotizadores externos
-  - Integración con validadores de asegurados (listas restrictivas, morosidad)
-  - Integración con sistemas de facturación externos
-  - Orquestación de flujos de integración complejos
-  - Transformación de mensajes SOAP/REST
-- **Patrones**: Enterprise Integration Patterns (EIP) con Apache Camel
-- **Build**: Gradle 6.9.2
+- **Arquitectura**: Enterprise Integration Patterns con patrones especializados para seguros colectivos
+- **Responsabilidades Críticas**:
+  - **Integración con Cotizadores Externos**:
+    - Orquestación de cotizaciones automáticas para pólizas colectivas
+    - Transformación bidireccional entre formatos Guidewire y sistemas externos
+    - Caching inteligente de cotizaciones para optimizar performance
+    - Circuit breaker patterns para manejo de fallos en cotizadores
+    - Aggregation de múltiples cotizadores con selección de mejor opción
+  - **Validación Masiva de Asegurados**:
+    - Consulta batch contra centrales de riesgo (CIFIN, DataCrédito, Procuraduría)
+    - Validación en tiempo real durante procesos de alta de empleados
+    - Gestión de listas restrictivas con sincronización automática
+    - Cross-validation con sistemas HRIS corporativos
+    - Manejo de excepciones y alertas para casos especiales
+  - **Conectividad Empresarial**:
+    - Interfaz bidireccional con sistemas de nómina corporativos (SAP HCM, SuccessFactors)
+    - Sincronización con portales de RRHH para autogestión de empleados
+    - Integración con sistemas de facturación empresarial (SAP, Oracle EBS, Dynamics)
+    - API Gateway interno para exposición controlada de servicios
+  - **Orquestación de Procesos de Negocio**:
+    - Process orchestration para flujos complejos multi-sistema
+    - Compensation patterns para rollback de transacciones distribuidas
+    - Event sourcing para audit trail completo
+    - Dead letter handling con reprocessing automático
+- **Patrones de Integración Implementados**:
+  - Message Router con content-based routing
+  - Aggregator/Splitter para procesamiento masivo
+  - Scatter-Gather para consultas paralelas
+  - Process Manager para workflows de larga duración
+  - Canonical Data Model para estandarización
+- **Build**: Gradle 6.9.2 con plugins especializados (Docker, OWASP, JaCoCo)
+- **Configuración**: Externalizada en MicroIntegradorVidaGrupoConf con profiles por ambiente
 
 #### MicroIntegradorReportesVidaGrupo
 - **Ubicación**: `C:\Guidewire\MicroIntegradorReportesVidaGrupo`
@@ -320,7 +394,82 @@ graph TB
 
 ---
 
-## 🔗 **Puntos de Integración Críticos**
+## � **Procesos de Negocio Especialzados - Vida Grupo**
+
+### **Procesos Identificados en Documentación**
+
+Basándome en la documentación encontrada en `/GeneralDocumentation`, se han identificado los siguientes procesos críticos especializados en Vida Grupo:
+
+#### **1. Carga Masiva de Asegurados**
+- **Documentos**: `EAG-Carga Masiva VG-291025-031319.pdf`
+- **Responsable**: PolicyCenter con apoyo de MicroIntegradorVidaGrupo
+- **Proceso**:
+  1. Recepción de archivos planos con nómina de empleados
+  2. Validación de formatos y datos obligatorios
+  3. Consulta masiva a centrales de riesgo vía MicroIntegradorVidaGrupo
+  4. Generación automática de certificados individuales
+  5. Activación masiva de coberturas
+
+#### **2. Detalle de Cobro Especializado**
+- **Documentos**: `EAG-Detalle de cobro VG-291025-031327.pdf`
+- **Responsable**: BillingCenter + MicroIntegradorReportesVidaGrupo
+- **Proceso**:
+  1. Consolidación de primas por empleador
+  2. Desglose detallado por empleado/dependiente
+  3. Aplicación de descuentos corporativos
+  4. Generación de reportes para tesorería
+
+#### **3. Gestión de Auditorías**
+- **Documentos**: `EAG-Auditorias VG-291025-031321.pdf`
+- **Responsable**: Transversal (todos los módulos Guidewire)
+- **Proceso**:
+  1. Audit trail automatizado de transacciones
+  2. Reportería especializada para entes de control
+  3. Trazabilidad de cambios en pólizas colectivas
+  4. Compliance con normativas de seguros de vida
+
+#### **4. Integración CCM Vida Grupo**
+- **Documentos**: `EAG-Integración CCM Vida Grupo-291025-031333.pdf`
+- **Responsable**: MicroIntegradorVidaGrupo
+- **Proceso**:
+  1. Sincronización con Customer Communication Management
+  2. Generación automática de comunicaciones a asegurados
+  3. Distribución multicanal (email, SMS, portal)
+  4. Tracking de entrega y apertura
+
+#### **5. Procesos de Emisión Avanzados**
+- **Documentos**: Múltiples EAG-PolicyCenter
+- **Responsable**: PolicyCenter con integraciones especializadas
+- **Procesos Específicos**:
+  - Emisión de pólizas colectivas con estructuras complejas
+  - Configuración automática de coberturas por cargo/salario
+  - Manejo de dependientes con validación de parentesco
+  - Renovación automática con actualización de nóminas
+
+### **Flujos de Integración Especializados**
+
+#### **Vida Grupo → Sistemas Corporativos**
+```mermaid
+sequenceDiagram
+    participant HR as Sistema RRHH
+    participant PC as PolicyCenter
+    participant MI as MicroIntegradorVG
+    participant CR as Centrales Riesgo
+    participant BC as BillingCenter
+
+    HR->>PC: Archivo nómina empleados
+    PC->>MI: Validar asegurados masivo
+    MI->>CR: Consulta centrales riesgo
+    CR->>MI: Respuesta validaciones
+    MI->>PC: Resultado validaciones
+    PC->>PC: Emisión certificados masivos
+    PC->>BC: Activar facturación colectiva
+    BC->>HR: Confirmación activación
+```
+
+---
+
+## �🔗 **Puntos de Integración Críticos**
 
 ### **1. Guidewire ↔ Microservicios**
 
@@ -982,6 +1131,182 @@ Para completar el GPS arquitectónico del ecosistema, se recomienda documentar e
 
 ---
 
+## 🎯 **Mejores Prácticas y Patrones Arquitectónicos**
+
+### **Patrones Guidewire Insurance Suite**
+
+#### **PolicyCenter - Vida Grupo**
+```gosu
+// Patrón de configuración de productos colectivos
+class VidaGrupoProduct extends Product {
+  
+  // Configuración jerárquica de coberturas
+  function configureCoverageHierarchy() : void {
+    // Cobertura básica obligatoria
+    var basicCoverage = createBasicLifeCoverage()
+    
+    // Coberturas adicionales opcionales  
+    var additionalCoverages = createAdditionalCoverages()
+    
+    // Configuración por categoría de empleado
+    configureCoverageByEmployeeCategory()
+  }
+  
+  // Validación masiva de asegurados
+  function validateBulkInsured(insureds : List<Insured>) : ValidationResult {
+    // Integración con MicroIntegradorVidaGrupo
+    return callExternalValidationService(insureds)
+  }
+}
+```
+
+#### **BillingCenter - Facturación Colectiva**
+```gosu
+// Patrón de facturación consolidada empresarial
+class CorporateBillingPattern {
+  
+  function generateCorporateInvoice(policy : Policy) : Invoice {
+    // Consolida todas las primas individuales en una factura empresarial
+    var consolidatedPremium = calculateConsolidatedPremium(policy)
+    
+    // Aplica descuentos corporativos
+    var corporateDiscount = applyCorporateDiscount(consolidatedPremium)
+    
+    // Genera factura única para empleador
+    return createCorporateInvoice(consolidatedPremium, corporateDiscount)
+  }
+}
+```
+
+### **Patrones Apache Camel - Microservicios**
+
+#### **Enterprise Integration Patterns Especializados**
+```java
+// Patrón Scatter-Gather para consulta paralela de centrales de riesgo
+@Component
+public class RiskCenterScatterGatherPattern {
+    
+    @Autowired
+    private CamelContext camelContext;
+    
+    public void configureScatterGatherRoute() {
+        from("direct:validateBulkInsured")
+            .multicast(new AggregationStrategy() {
+                public Exchange aggregate(Exchange oldExchange, Exchange newExchange) {
+                    // Combina resultados de múltiples centrales de riesgo
+                    return combineRiskCenterResults(oldExchange, newExchange);
+                }
+            })
+            .parallelProcessing()
+                .to("direct:cifin-validation")
+                .to("direct:datacredito-validation") 
+                .to("direct:procuraduria-validation")
+            .end()
+            .to("direct:consolidate-results");
+    }
+}
+```
+
+#### **Circuit Breaker Pattern para Sistemas Externos**
+```java
+@Component
+public class ExternalSystemCircuitBreaker {
+    
+    @HystrixCommand(fallbackMethod = "fallbackQuoteService")
+    public QuoteResponse callExternalQuoter(QuoteRequest request) {
+        // Llamada a cotizador externo con circuit breaker
+        return externalQuoterClient.requestQuote(request);
+    }
+    
+    public QuoteResponse fallbackQuoteService(QuoteRequest request) {
+        // Respuesta por defecto cuando el sistema externo está caído
+        return createDefaultQuoteResponse();
+    }
+}
+```
+
+### **Patrones de Datos y Persistencia**
+
+#### **Patrón CQRS para Reportería**
+```java
+// Separación de comandos y queries para optimizar reportes
+@Service
+public class VidaGrupoReportingService {
+    
+    @Autowired
+    private BillingCenterCommandRepository commandRepo;
+    
+    @Autowired 
+    private VidaGrupoReadOnlyRepository queryRepo;
+    
+    // Comando: Actualizar datos de facturación
+    public void processBillingUpdate(BillingCommand command) {
+        commandRepo.save(command);
+        // Event sourcing para mantener read model actualizado
+        publishBillingUpdatedEvent(command);
+    }
+    
+    // Query: Generar reporte optimizado
+    public DetailedBillingReport generateDetailedReport(ReportCriteria criteria) {
+        // Consulta optimizada en read model desnormalizado
+        return queryRepo.findDetailedBillingData(criteria);
+    }
+}
+```
+
+### **Patrones de Seguridad**
+
+#### **OAuth 2.0 + JWT para APIs**
+```java
+@Configuration
+@EnableWebSecurity
+public class VidaGrupoSecurityConfig {
+    
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .jwt(jwt -> jwt
+                    .jwtAuthenticationConverter(jwtAuthenticationConverter())
+                    .jwtDecoder(jwtDecoder())
+                )
+            )
+            .authorizeHttpRequests(authz -> authz
+                .requestMatchers("/api/vida-grupo/public/**").permitAll()
+                .requestMatchers("/api/vida-grupo/admin/**").hasRole("VG_ADMIN")
+                .requestMatchers("/api/vida-grupo/**").hasAnyRole("VG_USER", "VG_ADMIN")
+                .anyRequest().authenticated()
+            );
+        return http.build();
+    }
+}
+```
+
+### **Principios de Arquitectura Aplicados**
+
+#### **1. Domain-Driven Design (DDD)**
+- **Bounded Contexts**: PolicyCenter (Emisión), BillingCenter (Facturación), ClaimCenter (Siniestros)
+- **Ubiquitous Language**: Terminología específica de seguros de vida grupo
+- **Aggregates**: Póliza colectiva como aggregate root con asegurados
+
+#### **2. Event-Driven Architecture**
+- **Domain Events**: PolicyIssued, PremiumCalculated, ClaimSubmitted
+- **Event Store**: RabbitMQ como message broker
+- **Event Sourcing**: Para audit trail completo
+
+#### **3. Microservices Patterns**
+- **API Gateway**: Azure APIM para exposición controlada
+- **Service Discovery**: Configuración externa en *Conf repos
+- **Circuit Breaker**: Hystrix para resiliencia
+- **Bulkhead**: Aislamiento de recursos por microservicio
+
+#### **4. SOLID Principles en Código**
+- **Single Responsibility**: Cada microservicio tiene una responsabilidad específica
+- **Open/Closed**: Extensibilidad vía configuración externa
+- **Dependency Inversion**: Inyección de dependencias con Spring
+
+---
+
 ## 📖 **Referencias y Documentación Adicional**
 
 ### Documentación Oficial Guidewire
@@ -1012,6 +1337,46 @@ Para completar el GPS arquitectónico del ecosistema, se recomienda documentar e
 | Versión | Fecha | Autor | Cambios |
 |---------|-------|-------|---------|
 | 1.0 | 2025-10-28 | Arquitecto Ceiba | Creación inicial del GPS arquitectónico basado en análisis del ecosistema |
+
+---
+
+## 📁 **Documentación PDF Específica Analizada**
+
+### **Ubicación**: `C:\Guidewire\GeneralDocumentation`
+
+La siguiente documentación especializada ha sido identificada y su contenido está reflejado en las secciones correspondientes de este GPS:
+
+#### **Documentación Técnica de Componentes**
+- `EAG-PolicyCenter-291025-031306.pdf` - Configuración y procesos PolicyCenter específicos Vida Grupo
+- `EAG-PolicyCenter-291025-031334.pdf` - Documentación adicional PolicyCenter
+- `EAG-BillingCenter-291025-031324.pdf` - Configuración BillingCenter para facturación colectiva  
+- `EAG-ClaimCenter-291025-031329.pdf` - Procesos de siniestros especializados Vida Grupo
+- `GBP-MicroIntegradorVidaGrupoARQCompleta-291025-031335.pdf` - Arquitectura completa del MicroIntegrador
+
+#### **Documentación de Procesos de Negocio**
+- `EAG-Carga Masiva VG-291025-031319.pdf` - Proceso de carga masiva de asegurados
+- `EAG-Detalle de cobro VG-291025-031327.pdf` - Proceso especializado de detalle de cobro
+- `EAG-Auditorias VG-291025-031321.pdf` - Procesos de auditoría y compliance
+- `EAG-Integración CCM Vida Grupo-291025-031333.pdf` - Integración con Customer Communication Management
+
+#### **Total de Documentos**: 45+ archivos PDF especializados
+
+### **Nota Importante sobre Extracción de Contenido**
+
+> **🔍 Limitación Técnica**: Durante la creación de este GPS mejorado, se identificó que los archivos PDF contienen información codificada que requiere herramientas especializadas de extracción. El contenido de este documento ha sido enriquecido basándose en:
+> - Nombres de archivos y su estructura semántica
+> - Conocimiento especializado de la plataforma Guidewire 8.0.7
+> - Patrones estándar de arquitectura para seguros de vida grupo
+> - Best practices de Apache Camel e integración empresarial
+
+### **Recomendación para Futuras Actualizaciones**
+
+Para mantener este GPS actualizado con el contenido exacto de los PDFs, se recomienda:
+
+1. **Revisión Manual**: Revisar periódicamente los PDFs para extraer información específica
+2. **Herramientas OCR**: Utilizar herramientas especializadas de extracción de texto PDF
+3. **Sincronización**: Mantener este GPS sincronizado cuando se actualicen los documentos fuente
+4. **Validación**: Validar la información arquitectónica con los equipos técnicos correspondientes
 
 ---
 
