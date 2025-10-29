@@ -418,6 +418,7 @@ Basándome en la documentación encontrada en `/GeneralDocumentation`, se han id
   2. Desglose detallado por empleado/dependiente
   3. Aplicación de descuentos corporativos
   4. Generación de reportes para tesorería
+- **📄 Documentación detallada del flujo**: [Flujo de Generación de Reporte de Detalle de Cobro](./flujo-generacion-reporte-detalle-cobro.md)
 
 #### **3. Gestión de Auditorías**
 - **Documentos**: `EAG-Auditorias VG-291025-031321.pdf`
@@ -1113,7 +1114,7 @@ Para completar el GPS arquitectónico del ecosistema, se recomienda documentar e
 
 ### 2. Flujos de Negocio (usar comando `architect *documentar-flujo-negocio`)
 - **Emisión de póliza colectiva** (PolicyCenter → MicroIntegradorVidaGrupo → Cotizadores)
-- **Generación de reporte de detalle de cobro** (BillingCenter → MicroIntegradorReportesVidaGrupo → RabbitMQ)
+- ✅ **Generación de reporte de detalle de cobro** - [Documentado](./flujo-generacion-reporte-detalle-cobro.md) (BillingCenter → MicroIntegradorReportesVidaGrupo → RabbitMQ)
 - **Gestión de siniestros** (ClaimCenter → MicroIntegradorVidaGrupo → Validadores)
 - **Facturación y cobro** (BillingCenter → Sistemas de facturación externos)
 
