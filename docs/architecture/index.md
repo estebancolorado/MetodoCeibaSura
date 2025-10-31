@@ -286,7 +286,9 @@ graph TB
   - Oracle JDBC para consultas directas
   - Splunk para logging centralizado
 - **Build**: Gradle 6.9.2
-- **Documentación**: [README detallado](../MicroIntegradorReportesVidaGrupo/README.md)
+- **Documentación**: 
+  - [📘 Arquitectura Detallada](architecture-microintegrador-reportes-vidagrupo.md)
+  - [README del proyecto](../MicroIntegradorReportesVidaGrupo/README.md)
 
 ### **3. Infraestructura como Código**
 
