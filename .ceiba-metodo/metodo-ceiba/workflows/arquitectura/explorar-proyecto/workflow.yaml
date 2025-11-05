@@ -1,0 +1,22 @@
+# Explorar Proyecto - Workflow Configuration
+name: explorar-proyecto
+description: "Ayuda al usuario a explorar y entender cualquier aspecto del proyecto mediante búsqueda inteligente en documentación, código y configuración. Proporciona respuestas contextualizadas y completas basadas en la información disponible del proyecto"
+author: "Método Ceiba - Arquitecto"
+
+# Critical variables
+config_source: "{project-root}/.ceiba-metodo/metodo-ceiba/config.yaml"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+date: system-generated
+architecture_sharded_location: "{config_source}:architecture_sharded_location"
+
+# Module path and component files
+installed_path: "{project-root}/.ceiba-metodo/metodo-ceiba/workflows/arquitectura/explorar-proyecto"
+instructions: "{installed_path}/instructions.md"
+validation: "{installed_path}/checklist.md"
+
+# Project exploration variables (will be elicited)
+topic_name: "{{topic_name}}"
+query_type: "{{query_type}}"
+search_scope: "{{search_scope}}"
+exploration_intent: "{{exploration_intent}}"

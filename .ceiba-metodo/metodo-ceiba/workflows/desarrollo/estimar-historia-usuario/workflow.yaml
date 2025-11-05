@@ -1,0 +1,44 @@
+# Estimar Historia de Usuario - Workflow Configuration
+name: "estimar-historia-usuario"
+description: "Estimar tiempos de desarrollo para historias de usuario previamente refinadas, calculando estimaciones para diferentes perfiles de desarrollador incluyendo el Método Ceiba"
+author: "juan"
+
+# Critical variables from config
+config_source: "{project-root}/.ceiba-metodo/metodo-ceiba/config.yaml"
+output_folder: "{config_source}:output_folder"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+document_output_language: "{config_source}:document_output_language"
+date: system-generated
+
+# Module path and component files
+installed_path: "{project-root}/.ceiba-metodo/metodo-ceiba/workflows/desarrollo/estimar-historia-usuario"
+template: true
+instructions: "{installed_path}/instructions.md"
+template_file: "{installed_path}/template.md"
+
+# Variables used in workflow - resolved from config_source or prompted
+variables:
+  story_number: "prompt" # Número de la historia a estimar
+  dev_story_location: "{config_source}:dev_story_location" # Directory where stories are stored
+
+# Output configuration - enriches existing story file
+default_output_file: "{dev_story_location}/{story_number}.story.md"
+output_mode: "enrich" # Enrich existing file with estimation section
+
+# Estimation factors - configurable for calibration
+estimation_factors:
+  # Método Ceiba optimization (discount percentage)
+  metodo_ceiba_discount: 0.60 # 60% de ahorro vs tradicional (te quedas con 40% del tiempo)
+
+  # Role multipliers by complexity level (apply to both Traditional and Método Ceiba)
+  multipliers:
+    BAJA:
+      junior: 1.5
+      semi_senior: 1.2
+    MEDIA:
+      junior: 2.5
+      semi_senior: 1.6
+    ALTA:
+      junior: 4.0
+      semi_senior: 2.0

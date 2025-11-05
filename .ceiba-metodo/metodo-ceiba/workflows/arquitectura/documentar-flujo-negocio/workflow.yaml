@@ -1,0 +1,29 @@
+# Documentar Flujo de Negocio - Workflow Configuration
+name: documentar-flujo-negocio
+description: "Documentar flujos de negocio críticos del sistema mediante diagramas de secuencia detallados que ilustren las interacciones entre componentes, incluyendo rutas de éxito, manejo de errores y operaciones asíncronas"
+author: "Método Ceiba - Arquitecto"
+
+# Critical variables
+config_source: "{project-root}/.ceiba-metodo/metodo-ceiba/config.yaml"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+date: system-generated
+architecture_sharded_location: "{config_source}:architecture_sharded_location"
+
+# Module path and component files
+installed_path: "{project-root}/.ceiba-metodo/metodo-ceiba/workflows/arquitectura/documentar-flujo-negocio"
+template: "{installed_path}/template.md"
+instructions: "{installed_path}/instructions.md"
+validation: "{installed_path}/checklist.md"
+
+# Output configuration
+default_output_file: "{architecture_sharded_location}/flujo-{{flow_name}}.md"
+
+# Flow analysis variables (will be elicited)
+flow_name: "{{flow_name}}"
+flow_description: "{{flow_description}}"
+main_components: "{{main_components}}"
+has_async: "{{has_async}}"
+has_external_integrations: "{{has_external_integrations}}"
+business_process: "{{business_process}}"
+critical_error_points: "{{critical_error_points}}"

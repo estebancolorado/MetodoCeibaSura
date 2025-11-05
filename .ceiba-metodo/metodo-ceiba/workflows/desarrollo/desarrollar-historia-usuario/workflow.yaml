@@ -1,0 +1,30 @@
+# Desarrollar Historia de Usuario - Workflow Configuration
+name: "desarrollar-historia-usuario"
+description: "Implementar historia de usuario estimada siguiendo las tareas de refinamiento, con desarrollo iterativo, testing completo y actualización de estado"
+author: "juan"
+
+# Critical variables from config
+config_source: "{project-root}/.ceiba-metodo/metodo-ceiba/config.yaml"
+output_folder: "{config_source}:output_folder"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+document_output_language: "{config_source}:document_output_language"
+date: system-generated
+
+# Module path and component files
+installed_path: "{project-root}/.ceiba-metodo/metodo-ceiba/workflows/desarrollo/desarrollar-historia-usuario"
+template: false # Action workflow - no template needed
+instructions: "{installed_path}/instructions.md"
+
+# Variables used in workflow
+variables:
+  story_number: "prompt" # Número de la historia a desarrollar
+  dev_story_location: "{config_source}:dev_story_location" # Directory where stories are stored
+  execution_mode: "prompt" # Modo de ejecución: "component" (recomendado) o "continuous"
+  architecture_sharded_location: "{config_source}:architecture_sharded_location" # Architecture docs location
+  coding_standards_file: "coding-standards.md" # Archivo de estándares de código a buscar
+  working_on_review_corrections: false # Control flag: true cuando implementando correcciones de peer review
+
+# Story file will be modified in place
+default_output_file: "{dev_story_location}/{story_number}.story.md"
+output_mode: "modify" # Modify existing file (update checkboxes, Dev Agent Record, File List, Change Log, Status)

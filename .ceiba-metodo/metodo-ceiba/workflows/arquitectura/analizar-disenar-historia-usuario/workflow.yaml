@@ -1,0 +1,50 @@
+# Analizar y Diseñar Historia de Usuario - Método Ceiba
+# Workflow para análisis arquitectónico de HU creadas por el PO
+name: "analizar-disenar-historia-usuario"
+description: "Analizar una historia de usuario desde la perspectiva arquitectónica y proponer un diseño de implementación validado por el usuario humano. Se enfoca en decisiones arquitectónicas y de diseño, actualizando la HU con análisis completo. Prepara la base para refinamiento técnico posterior."
+author: "Método Ceiba"
+
+# Critical variables load from config_source
+config_source: "{project-root}/.ceiba-metodo/metodo-ceiba/config.yaml"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+document_output_language: "{config_source}:document_output_language"
+date: system-generated
+
+# Module path and component files
+installed_path: "{project-root}/.ceiba-metodo/metodo-ceiba/workflows/arquitectura/analizar-disenar-historia-usuario"
+template: "{installed_path}/seccion-analisis-arquitectonico.template.md" # Template parcial - sección a agregar a HU existente
+instructions: "{installed_path}/instructions.md"
+validation: "{installed_path}/checklist.md"
+
+# Required inputs
+recommended_inputs:
+  - story_number: "Número de la historia a analizar (ej: 5 para 5.nombre.story.md)"
+  - story_path: "Ruta completa al archivo de historia (alternativa a story_number)"
+  - architectural_considerations: "Consideraciones, restricciones o planteamientos iniciales del arquitecto"
+
+# Variables used in workflow
+variables:
+  story_number: "prompt" # Número de la historia a analizar
+  story_path: "prompt" # Ruta alternativa al archivo
+  story_title: "extracted" # Extraído del archivo de HU
+  architectural_approach: "prompt" # A: Dirigido, B: Exploratorio
+  architectural_considerations: "prompt" # Consideraciones iniciales (si approach A)
+  dev_story_location: "{config_source}:dev_story_location" # Directory where stories are stored
+  architecture_sharded_location: "{config_source}:architecture_sharded_location" # Architecture docs location
+  architecture_file: "{config_source}:architecture_file" # Main architecture file
+
+# Execution mode
+execution_hints:
+  interactive: true # Requiere interacción constante con el arquitecto
+  autonomous: false # No puede ejecutarse sin input del arquitecto
+  validation_required: true # Validación humana obligatoria de decisiones
+
+# Tags for categorization
+tags:
+  - user-story
+  - architecture
+  - design
+  - metodo-ceiba
+  - planning
+  - architect-role

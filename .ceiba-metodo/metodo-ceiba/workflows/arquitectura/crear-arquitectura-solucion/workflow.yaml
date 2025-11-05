@@ -1,0 +1,39 @@
+# Arquitectura Solución - Workflow Configuration
+name: "arquitectura-solucion"
+description: "Workflow para generar documentación de arquitectura basada en arc42, incluyendo contexto, restricciones, estrategia de solución y vistas estáticas/dinámicas"
+author: "Método Ceiba"
+version: "1.0.0"
+
+# Critical variables load from config_source
+config_source: "{project-root}/.ceiba-metodo/metodo-ceiba/config.yaml"
+output_folder: "{config_source}:output_folder"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+document_output_language: "{config_source}:document_output_language"
+date: system-generated
+
+# Required inputs from user
+required_inputs:
+  - project_name: "Nombre del proyecto para el cual se genera la arquitectura"
+
+# Optional docs that can be provided as input
+recommended_inputs:
+  - docs_prd: "Path to docs/prd.md - Product Requirements Document"
+  - existing_docs: "Path to any existing architecture or requirements documents"
+
+# Module path and component files
+installed_path: "{project-root}/.ceiba-metodo/metodo-ceiba/workflows/arquitectura/crear-arquitectura-solucion"
+template: true # This is a document workflow - generates template
+instructions: "{installed_path}/instructions.md"
+template_file: "{installed_path}/templates/solution-architecture-template.md"
+validation: "{installed_path}/checklist.md"
+
+# Output configuration
+default_output_file: "{output_folder}/architecture-{{project_name}}-{{date}}.md"
+output_format: "markdown"
+output_title: "Documento de Arquitectura para {{project_name}}"
+
+# Workflow settings
+workflow_mode: "interactive"
+elicitation_mode: "advanced"
+allow_yolo_mode: true

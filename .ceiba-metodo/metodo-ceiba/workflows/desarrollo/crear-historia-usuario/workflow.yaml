@@ -1,0 +1,54 @@
+# Crear Historia de Usuario Workflow - Método Ceiba
+# Workflow para crear o importar historias de usuario siguiendo metodología estructurada del PO
+name: "crear-historia-usuario"
+description: "Crear o importar historias de usuario siguiendo una metodología estructurada. Soporta dos modos: escribir desde cero o importar y validar historias existentes. Enfocándose en obtener información completa del usuario sin asumir detalles. Genera la base que posteriormente será refinada por el Scrum Master."
+author: "Método Ceiba"
+
+# Critical variables load from config_source
+config_source: "{project-root}/.ceiba-metodo/metodo-ceiba/config.yaml"
+output_folder: "{config_source}:output_folder"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+document_output_language: "{config_source}:document_output_language"
+date: system-generated
+
+# Module path and component files
+installed_path: "{project-root}/.ceiba-metodo/metodo-ceiba/workflows/desarrollo/crear-historia-usuario"
+template: "{installed_path}/historia-de-usuario.template.md"
+instructions: "{installed_path}/instructions.md"
+validation: "{installed_path}/checklist.md"
+
+# Optional inputs
+recommended_inputs:
+  - requirement_description: "Descripción inicial del requerimiento del usuario (para modo escribir)"
+  - existing_story: "Historia de usuario completa a importar (para modo importar)"
+  - user_profile: "Perfil técnico del usuario (A: Funcional Puro, B: Técnico-Funcional)"
+  - work_mode: "Modo de trabajo (1: Escribir desde cero, 2: Importar existente)"
+
+# Output configuration
+default_output_file: "{dev_story_location}/{{story_number}}.{{story_name}}.story.md"
+
+# Variables used in workflow - all resolved from config_source
+variables:
+  story_number: "prompt" # Número/consecutivo de la historia
+  story_name: "prompt" # Nombre de la historia (será formateado automáticamente)
+  user_profile: "prompt" # A o B según caracterización
+  work_mode: "prompt" # 1 (Escribir) o 2 (Importar)
+  requirement_description: "prompt" # Descripción inicial (si modo 1)
+  existing_story_content: "prompt" # Historia existente (si modo 2)
+  dev_story_location: "{config_source}:dev_story_location" # Directory where stories are stored
+  architecture_sharded_location: "{config_source}:architecture_sharded_location" # Architecture docs location
+  architecture_file: "{config_source}:architecture_file" # Main architecture file
+
+# Execution mode
+execution_hints:
+  interactive: true # Requiere interacción constante con el usuario
+  autonomous: false # No puede ejecutarse sin input del usuario
+
+# Tags for categorization
+tags:
+  - user-story
+  - product-owner
+  - requirements
+  - metodo-ceiba
+  - planning

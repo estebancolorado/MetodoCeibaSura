@@ -1,0 +1,34 @@
+# Documentar Arquitectura Base Workflow Configuration
+name: "documentar-arquitectura-base"
+description: "Documentar proyectos complejos con múltiples repositorios, creando una 'arquitectura de alto nivel' que guíe el desarrollo cuando llegan historias de usuario. Esta tarea está optimizada para ecosistemas empresariales con múltiples repositorios y sistemas distribuidos."
+author: "Método Ceiba"
+
+# Critical variables load from config_source
+config_source: "{project-root}/.ceiba-metodo/metodo-ceiba/config.yaml"
+output_folder: "{config_source}:output_folder"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+document_output_language: "{config_source}:document_output_language"
+date: system-generated
+
+# Optional docs that if loaded on start to kickstart this workflow
+recommended_inputs:
+  - existing_architecture_docs: "Documentación de arquitectura existente (.md files)"
+  - project_config: "config.yaml del proyecto"
+  - repository_documentation: "READMEs y documentación de repositorios"
+
+# Module path and component files
+installed_path: "{project-root}/.ceiba-metodo/metodo-ceiba/workflows/arquitectura/documentar-arquitectura-base"
+template: "{installed_path}/template.md"
+instructions: "{installed_path}/instructions.md"
+validation: "{installed_path}/checklist.md"
+
+# Output configuration
+default_output_file: "{output_folder}/architecture/index.md"
+
+# Tool Requirements
+required_tools:
+  - "File Reader":
+      description: "Para analizar documentación existente y archivos de configuración"
+  - "Code Analysis":
+      description: "Para examinar estructura de repositorios y dependencias"

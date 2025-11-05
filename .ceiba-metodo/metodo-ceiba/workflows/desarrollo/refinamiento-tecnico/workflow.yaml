@@ -1,0 +1,29 @@
+# Refinamiento Técnico - Workflow Configuration
+name: "refinamiento-tecnico"
+description: "Refinar una historia de usuario existente añadiendo contexto técnico profundo, análisis de implementación, descomposición en tareas técnicas y preparación completa para desarrollo"
+author: "juan"
+
+# Critical variables from config
+config_source: "{project-root}/.ceiba-metodo/metodo-ceiba/config.yaml"
+output_folder: "{config_source}:output_folder"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+document_output_language: "{config_source}:document_output_language"
+date: system-generated
+
+# Module path and component files
+installed_path: "{project-root}/.ceiba-metodo/metodo-ceiba/workflows/desarrollo/refinamiento-tecnico"
+template: true
+instructions: "{installed_path}/instructions.md"
+template_file: "{installed_path}/template.md"
+
+# Variables used in workflow - resolved from config_source or prompted
+variables:
+  story_number: "prompt" # Número de la historia a refinar
+  dev_story_location: "{config_source}:dev_story_location" # Directory where stories are stored
+  architecture_sharded_location: "{config_source}:architecture_sharded_location" # Architecture docs location
+  coding_standards_file: "coding-standards.md" # Archivo de estándares de código a buscar
+
+# Output configuration - modifies existing story file
+default_output_file: "{dev_story_location}/{story_number}.story.md"
+output_mode: "enrich" # Enrich existing file with new sections

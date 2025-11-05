@@ -1,0 +1,63 @@
+# Revisar Historia - Workflow Configuration
+name: "revisar-historia"
+description: "Realizar revisión exhaustiva de código por peer reviewer senior, validando seguridad, calidad, arquitectura, tests y criterios de aceptación. Genera reporte estructurado con hallazgos y action items."
+author: "Método Ceiba - Peer Reviewer"
+version: "1.0.0"
+
+# Critical variables load from config_source
+config_source: "{project-root}/.ceiba-metodo/metodo-ceiba/config.yaml"
+output_folder: "{config_source}:output_folder"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+document_output_language: "{config_source}:document_output_language"
+date: system-generated
+
+# Story and Architecture locations
+dev_story_location: "{config_source}:dev_story_location"
+architecture_sharded_location: "{config_source}:architecture_sharded_location"
+architecture_file: "{config_source}:architecture_file"
+
+# Module path and component files
+installed_path: "{project-root}/.ceiba-metodo/metodo-ceiba/workflows/desarrollo/revisar-historia"
+template: true # This workflow uses template-based output
+instructions: "{installed_path}/instructions.md"
+template_file: "{installed_path}/template.md"
+validation: "{installed_path}/checklist.md"
+
+# Variables used in workflow
+variables:
+  story_number: "prompt" # Número de la historia a revisar (ej: 6 para 6.nombre.story.md)
+
+  # Review configuration
+  allow_status_values: ["Lista para Revisión", "Ready for Review", "Desarrollo Completado", "En Revisión"]
+  update_status_on_result: true
+
+  # Architecture and standards docs
+  arch_docs_file_names: ["index.md", "coding-standards.md", "architecture-*.md", "component-*.md", "flujo-*.md", "flow-*.md"]
+  coding_standards_file: "coding-standards.md"
+
+# Story file will be modified in place
+default_output_file: "{dev_story_location}/{story_number}.story.md"
+output_mode: "append" # Append new section "Revisión de Código (Peer Review)" at the end
+
+# Execution hints
+execution_hints:
+  interactive: false # Ejecuta en modo #yolo a menos que encuentre problemas
+  autonomous: true # Puede ejecutarse sin intervención si la historia está completa
+  validation_required: true # Validación del checklist es obligatoria
+
+# Tags for categorization
+tags:
+  - code-review
+  - quality-assurance
+  - security
+  - peer-review
+  - metodo-ceiba
+  - development
+
+# Dependencies
+dependencies:
+  required_workflows:
+    - "desarrollar-historia-usuario" # La historia debe estar implementada primero
+  optional_workflows:
+    - "refinamiento-tecnico" # Mejora la revisión si existe refinamiento previo

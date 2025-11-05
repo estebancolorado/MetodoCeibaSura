@@ -1,0 +1,26 @@
+# Generar Estándares de Código - Workflow Configuration
+name: generar-estandares-codigo
+description: "Crear o actualizar el documento de estándares de código basándose en análisis del código existente, documentación previa y mejores prácticas específicas del proyecto"
+author: "Método Ceiba - Arquitecto"
+
+# Critical variables
+config_source: "{project-root}/.ceiba-metodo/metodo-ceiba/config.yaml"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+date: system-generated
+architecture_sharded_location: "{config_source}:architecture_sharded_location"
+
+# Module path and component files
+installed_path: "{project-root}/.ceiba-metodo/metodo-ceiba/workflows/arquitectura/generar-estandares-codigo"
+template: "{installed_path}/template.md"
+instructions: "{installed_path}/instructions.md"
+validation: "{installed_path}/checklist.md"
+
+# Output configuration
+default_output_file: "{architecture_sharded_location}/coding-standards.md"
+
+# Project analysis variables (will be elicited)
+project_name: "{{project_name}}"
+existing_docs: "{{existing_docs}}"
+linting_tools: "{{linting_tools}}"
+main_technologies: "{{main_technologies}}"

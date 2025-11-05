@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Task: Check Module Version
+  Description: Verifica actualizaciones disponibles del módulo contra registry npm
+  Author: Método Ceiba
+  Version: 1.0.0
+-->
+
+<task id="check-module-version" version="1.0.0">
+
+  <llm critical="true">
+    <mandate>Always read COMPLETE files - NEVER use offset/limit when reading any workflow related files</mandate>
+    <mandate>Instructions are MANDATORY - either as file path, steps or embedded list in YAML, XML or markdown</mandate>
+    <mandate>Execute ALL steps in instructions IN EXACT ORDER</mandate>
+    <mandate>Save to template output file after EVERY "template-output" tag</mandate>
+    <mandate>NEVER delegate a step - YOU are responsible for every steps execution</mandate>
+  </llm>
+  <metadata>
+    <name>Check Module Version</name>
+    <description>Verifica si hay actualizaciones disponibles del módulo en el registry npm (se ejecuta una vez al día con cache de 24h)</description>
+    <author>Método Ceiba</author>
+    <category>maintenance</category>
+  </metadata>
+
+  <parameters>
+    <param name="module_code" default="metodo-ceiba">Código del módulo a verificar</param>
+    <param name="package_name" default="@ceiba/metodo-ceiba">Nombre del package npm</param>
+    <param name="cache_path" default="{project-root}/.ceiba-metodo/.version-check-cache.json">Ruta del archivo de cache</param>
+    <param name="config_path" default="{project-root}/.ceiba-metodo/metodo-ceiba/config.yaml">Ruta del config.yaml</param>
+  </parameters>
+
+  <flow>
+    <session n="1" title="Notificar inicio">
+      <action>Mostrar: "🔍 Verificando versión de Método Ceiba..."</action>
+    </session>
+
+    <session n="2" title="Verificar cache válido">
+      <action>Usar read_file tool para leer {cache_path} (NO usar comandos de terminal) → parsear JSON → buscar entrada 'metodo-ceiba'</action>
+      <check if="entrada existe Y diferencia(NOW, lastCheck) menor a 24 horas">
+        <action>Cache válido → omitir sesiones 3-6, ir a saludo</action>
+      </check>
+      <action>Caso contrario → continuar sesión 3</action>
+    </session>
+
+    <session n="3" title="Consultar versiones">
+      <action>Usar read_file tool para leer {config_path} (NO usar comandos) → extraer campo 'version' → guardar como currentVersion</action>
+      <action>Ejecutar comandos npm (siempre juntos): npm cache clean --force && npm view @ceiba/metodo-ceiba version → guardar como latestVersion</action>
+    </session>
+
+    <session n="4" title="Evaluar estabilidad y determinar notificación">
+      <action>Detectar si currentVersion tiene tags prerelease (-alpha, -beta, -rc) → guardar como isCurrentPrerelease</action>
+      <action>Detectar si latestVersion tiene tags prerelease → guardar como isLatestPrerelease</action>
+      
+      <action>Aplicar lógica de decisión:</action>
+      <check if="isCurrentPrerelease = true Y isLatestPrerelease = true">
+        <action>shouldNotify = false (ambas son dev, mantener versión actual)</action>
+      </check>
+      <check if="isCurrentPrerelease = true Y isLatestPrerelease = false">
+        <action>shouldNotify = true (hay versión estable disponible)</action>
+      </check>
+      <check if="isCurrentPrerelease = false Y isLatestPrerelease = false">
+        <action>Comparar semver: extraer major.minor.patch de ambas versiones</action>
+        <action>Si currentVersion es MENOR que latestVersion → shouldNotify = true</action>
+        <action>Si currentVersion es IGUAL o MAYOR que latestVersion → shouldNotify = false</action>
+      </check>
+      <check if="isCurrentPrerelease = false Y isLatestPrerelease = true">
+        <action>shouldNotify = false (no notificar prerelease cuando usamos estable)</action>
+      </check>
+    </session>
+
+    <session n="5" title="OBLIGATORIO: Guardar cache" critical="true">
+      <mandate>Esta sesión es OBLIGATORIA y debe ejecutarse SIEMPRE independientemente de los resultados de sesión 4</mandate>
+      <mandate>El archivo de cache DEBE crearse o actualizarse en TODOS los casos</mandate>
+      
+      <action>Determinar valor de status: "outdated" si shouldNotify=true, "up-to-date" si shouldNotify=false</action>
+      <action>Obtener timestamp actual en formato ISO 8601 (YYYY-MM-DDTHH:mm:ssZ)</action>
+      <action>Crear estructura JSON con los valores reales:
+        {
+          "metodo-ceiba": {
+            "status": "[valor de status]",
+            "currentVersion": "[valor de currentVersion]",
+            "latestVersion": "[valor de latestVersion]",
+            "lastCheck": "[timestamp actual ISO]"
+          }
+        }
+      </action>
+      <action>Usar create_file tool para crear/sobrescribir archivo en ruta {cache_path} con el JSON construido</action>
+      <action>Verificar que el archivo fue creado exitosamente (confirmar al usuario)</action>
+    </session>
+
+    <session n="6" title="Notificar y actualizar si necesario">
+      <check if="shouldNotify = true">
+        <action>Mostrar: "📦 Nueva versión estable de Método Ceiba disponible: v{latestVersion} (actual: v{currentVersion})"</action>
+        <action>Ejecutar: npx @ceiba/metodo-ceiba@latest install</action>
+      </check>
+      <check if="shouldNotify = false">
+        <action>Mostrar: "✅ Método Ceiba está actualizado (v{currentVersion})"</action>
+      </check>
+    </session>
+
+    <session n="7" title="Manejo de errores">
+      <note>Si cualquier error ocurre en cualquier sesión: continuar sin bloquear (fail-silent)</note>
+    </session>
+  </flow>
+
+  <notes>
+    <note>Este task se ejecuta automáticamente en el activation step de cada agente</note>
+    <note>El cache compartido entre agentes evita verificaciones redundantes</note>
+    <note>La lógica de prerelease asegura que versiones alpha/beta/rc no causen falsas alertas</note>
+    <note>El modo fail-silent garantiza que problemas de red no bloqueen el inicio del agente</note>
+  </notes>
+</task>
