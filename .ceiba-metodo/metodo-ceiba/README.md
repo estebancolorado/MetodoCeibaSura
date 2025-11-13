@@ -493,8 +493,20 @@ architect *explorar-proyecto
 - Definición de estrategia de migración incremental (si es posible)
 - Documentación de decisiones arquitectónicas
 
+**� Ejemplo de prompt para ejecutar en la tarea explorar-proyecto del agente arquitecto recordar reemplazarlo con su necesidad puntual:**
+
+"Necesito hacer una actualización tecnológica en mi sistema actualizando las versiones de java de la versión 7 a la 11 y así mismo las versiones de spring boot de la 2.0 a la 3.0.
+
+Ayudame a hacer un análisis de impacto de dicha tarea, ayudame con una estrategia concreta de migración y ayudame a identificar una secuencia de pasos que me permita posteriormente dividir esta tarea en pequeñas historias de usuario técnicas.
+
+Deja todo este análisis en la ruta docs/architecture/migration/estrategia-migracion.md
+"
+
+
+
 **📊 Entregables:**
 
+- **Archivo:** `docs/architecture/migration/estrategia-migracion.md`
 - Análisis de impacto de la migración
 - Propuesta de estrategia de migración
 - Identificación de historias de usuario para la implementación
@@ -556,6 +568,39 @@ Una **migración pivotable** es aquella donde es posible identificar pivotes cla
 - ✅ **Rollback controlado:** Posibilidad de revertir pivotes específicos sin afectar el sistema completo
 - ✅ **Coexistencia:** Sistema legacy y nuevo pueden coexistir durante la migración
 
+### **Proceso Recomendado**
+
+#### **Paso 2.1: Inventario y Clasificación de Pivotes**
+
+```bash
+architect *explorar-proyecto
+```
+
+**📄 Propósito:** Identificar y catalogar todos los pivotes de migración del sistema, clasificándolos por tipo, proceso de negocio, complejidad 1-5 y dependencias.
+
+**📦 Actividades:**
+
+- Inventario completo de pivotes (endpoints, vistas, stored procedures, etc.)
+- Clasificación por tipo de pivote
+- Análisis de dependencias entre pivotes
+- Evaluación de complejidad técnica por pivote
+- Identificación de riesgos específicos por pivote
+- Priorización de pivotes según valor de negocio y riesgo
+
+**� Prompt sugerido para ejecutar en la tarea explorar-proyecto del agente arquitecto:**
+
+"Que es un pivote? es un punto de entrada que tenga este sistema y que sea una únidad funcional lo mas inpendiente posible, ejemplos de tipos de pivote: endpoint, tarea programada, vista, procedimiento almacenado etc.
+
+Estoy haciendo una migración de este sistema a otras tecnologias y necesito Identificar y catalogar todos los pivotes de migración con la siguiente información: tipo de pivote, modulo, proceso de negocio, complejidad técnica en escala 1-5, justificación de la complejidad técnica, riesgos del pivote en caso de existir y análisis de dependencias entre pivotes.
+
+Ayudame a sacar un invetario completo de pivotes en la ruta docs/architecture/migration/pivotes-inventario.md
+
+Realiza una priorización en el informe según el valor de negocio que observes en los pivotes"
+
+**�📊 Entregables:**
+
+- **Archivo:** `docs/architecture/migration/pivotes-inventario.md`
+
 ### **Estimación**
 
 La estimación de una migración pivotable se basa en **mediciones empíricas** mediante la migración completa de pivotes representativos:
@@ -583,35 +628,6 @@ La estimación de una migración pivotable se basa en **mediciones empíricas** 
 - Permite ajustes tempranos de alcance o recursos
 - Valida viabilidad de la estrategia de migración
 
-### **Proceso Recomendado**
-
-#### **Paso 2.1: Inventario y Clasificación de Pivotes**
-
-```bash
-architect *explorar-proyecto
-```
-
-**📄 Propósito:** Identificar y catalogar todos los pivotes de migración del sistema, clasificándolos por tipo, proceso de negocio, complejidad 1-5 y dependencias.
-
-**📦 Actividades:**
-
-- Inventario completo de pivotes (endpoints, vistas, stored procedures, etc.)
-- Clasificación por tipo de pivote
-- Análisis de dependencias entre pivotes
-- Evaluación de complejidad técnica por pivote
-- Identificación de riesgos específicos por pivote
-- Priorización de pivotes según valor de negocio y riesgo
-
-**📊 Entregables:**
-
-- **Archivo:** `docs/migration/pivotes-inventario.md`
-- **Contenido:**
-  - Listado completo de pivotes identificados
-  - Matriz de clasificación y complejidad
-  - Grafo de dependencias entre pivotes
-  - Estrategia de orden de migración
-  - Métricas de progreso y KPIs
-
 #### **Paso 2.2: Definición de Arquitectura TO-BE**
 
 ```bash
@@ -619,7 +635,7 @@ architect *explorar-proyecto
 architect *crear-arquitectura
 ```
 
-**📄 Propósito:** Documentar la arquitectura objetivo (TO-BE) que se implementará durante la migración.
+**📄 Propósito:** Documentar la arquitectura objetivo (TO-BE) que se implementará durante la migración. (Este paso debe ejecutarse solo cuando se necesite una rearquitectura en caso como por ejemplo monolito a microservicios, front legado a angular, etc.)
 
 **📦 Actividades:**
 
@@ -631,7 +647,7 @@ architect *crear-arquitectura
 
 **📊 Entregables:**
 
-- **Archivo:** `docs/migration/arquitectura-to-be.md`
+- **Archivo:** `docs/architecture/migration/arquitectura-to-be.md`
 - Documentación de componentes target
 - Patrones de integración entre legacy y nuevo sistema
 - Estrategia de datos y sincronización

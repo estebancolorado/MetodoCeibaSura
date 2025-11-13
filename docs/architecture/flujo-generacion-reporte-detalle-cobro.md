@@ -4,26 +4,28 @@
 
 ### Descripción del Flujo
 
-El flujo de **Generación de Reporte de Detalle de Cobro** es un proceso crítico que genera reportes detallados con información granular de cada asegurado dentro de una factura colectiva de pólizas de Vida Grupo. Este flujo orquesta la construcción asíncrona de archivos masivos que pueden contener desde miles hasta millones de registros, utilizando un patrón de work queues programadas para procesar grandes volúmenes de datos de forma eficiente sin impactar el rendimiento del sistema.
+El flujo de **Generación de Reporte de Detalle de Cobro** es un proceso crítico que genera reportes detallados con información granular de cada asegurado dentro de una factura colectiva de pólizas de Vida Grupo. Este flujo orquesta la construcción asíncrona de archivos masivos que pueden contener desde miles hasta millones de registros, utilizando el **Scheduled Job Pattern con Quartz Scheduler** para procesar grandes volúmenes de datos de forma eficiente sin impactar el rendimiento del sistema.
 
-El proceso inicia cuando una aplicación externa (PorChat, AVA, o BillingCenter) solicita la generación del reporte mediante una llamada REST. El sistema registra la solicitud y delega el procesamiento real a **4 work queues especializadas** que ejecutan de forma programada y distribuida:
+El proceso inicia cuando una aplicación externa (PorChat, AVA, o BillingCenter) solicita la generación del reporte mediante una llamada REST. El sistema registra la solicitud y delega el procesamiento real a **4 jobs programados (WorkQueues)** que ejecutan de forma calendarizada y distribuida mediante Quartz:
 
-1. **WorkQueue 1**: Consulta de datos de Guidewire y creación de cabecera en Azure
-2. **WorkQueue 2**: Construcción de registros del detalle y envío de bloques a Azure
-3. **WorkQueue 3**: Cierre de archivo en Azure y notificación vía RabbitMQ
-4. **WorkQueue 4**: Limpieza automática de registros antiguos
+1. **WorkQueue 1**: Consulta de datos de Guidewire y creación de cabecera en Azure (ejecutado cada hora)
+2. **WorkQueue 2**: Construcción de registros del detalle y envío de bloques a Azure (ejecutado cada hora)
+3. **WorkQueue 3**: Cierre de archivo en Azure y notificación vía RabbitMQ (ejecutado cada hora)
+4. **WorkQueue 4**: Limpieza automática de registros antiguos (ejecutado diariamente)
 
 ### Scope del Documento
 
-**Enfoque Principal**: Documentación técnica del flujo de trabajo end-to-end  
+**Enfoque Principal**: Documentación técnica del flujo de trabajo end-to-end con énfasis en arquitectura hexagonal  
 **Audiencia**: Desarrolladores, Arquitectos, Analistas de Negocio, Operaciones  
-**Última Actualización**: 30 de Octubre, 2025
+**Última Actualización**: 10 de Noviembre, 2025  
+**Versión**: 2.0 (Actualizado con estructura hexagonal modular)
 
 ### Componentes Involucrados
 
 | Componente                                  | Tecnología              | Puerto/Contexto                                 | Responsabilidad                                           |
 | ------------------------------------------- | ----------------------- | ----------------------------------------------- | --------------------------------------------------------- |
-| **MicroIntegradorReportesVidaGrupo**        | Apache Camel 3.20.0     | Puerto 9000                                     | Orquestación del flujo, procesamiento de work queues     |
+| **MicroIntegradorReportesVidaGrupo**        | Apache Camel 3.20.0 + Java 17 | Puerto 9000                           | Microservicio de reportes con arquitectura hexagonal modular |
+| **Módulo: detailcharge**                    | Hexagonal Architecture  | Módulo dentro del microservicio                 | Lógica específica del reporte de detalle de cobro         |
 | **BillingCenter (Guidewire)**               | Guidewire 8.0.7         | N/A (solo consulta de DB)                       | Fuente de datos de facturación y coberturas               |
 | **PolicyCenter (Guidewire)**                | Guidewire 8.0.7         | N/A (solo consulta de DB)                       | Fuente de datos de pólizas y asegurados                   |
 | **Azure Massive Download API**              | Microsoft Azure         | https://labapicorevidagrupo.suramericana.com... | Construcción y almacenamiento de archivos masivos         |
@@ -31,6 +33,16 @@ El proceso inicia cuando una aplicación externa (PorChat, AVA, o BillingCenter)
 | **Oracle DB (Control)**                     | Oracle Database         | JDBC 19.8.0.0                                   | Tablas de control y estado del proceso                    |
 | **Oracle DB (Guidewire Replica)**           | Oracle Database         | JDBC 19.8.0.0                                   | Réplica read-only de esquemas BC y PC                     |
 | **Aplicaciones Consumidoras (PorChat/AVA)** | Diversos                | N/A                                             | Solicitan y consumen reportes generados                   |
+
+### Arquitectura del Componente
+
+El MicroIntegradorReportesVidaGrupo implementa una **arquitectura hexagonal estricta** combinada con **diseño modular por tipo de reporte**. El reporte de detalle de cobro está implementado como un módulo independiente (`detailcharge`) organizado en 3 capas:
+
+- **Application Layer** (`application/detailcharge/`): Casos de uso - Commands, Queries y WorkQueue Processors (jobs programados)
+- **Domain Layer** (`domain/detailcharge/`): Lógica de negocio pura - Services, Models, Ports (interfaces), Providers
+- **Infrastructure Layer** (`infrastructure/detailcharge/`): Detalles técnicos - Adapters, Repositories, Routes (con Quartz Scheduler), Data Entities
+
+**Patrones aplicados**: Hexagonal Architecture, CQRS (Command/Query Separation), Repository Pattern, **Scheduled Job Pattern (Quartz)**, Event-Driven Architecture, Provider Pattern, Batch Processing Pattern
 
 ---
 
@@ -41,69 +53,130 @@ El proceso inicia cuando una aplicación externa (PorChat, AVA, o BillingCenter)
 ```mermaid
 sequenceDiagram
     participant APP as Aplicación Externa<br/>(PorChat/AVA/BC)
-    participant API as MicroIntegrador API<br/>(Netty HTTP :9000)
-    participant WQ1 as WorkQueue 1<br/>(Scheduled - Hourly)
-    participant WQ2 as WorkQueue 2<br/>(Scheduled - Hourly)
-    participant WQ3 as WorkQueue 3<br/>(Scheduled - Hourly)
-    participant WQ4 as WorkQueue 4<br/>(Scheduled - Daily)
+    participant API as API REST<br/>(RestApiRoute)
+    participant CMD as Command Layer<br/>(GenerateDetailChargeProcessor)
+    participant SVC as Domain Service<br/>(DetailChargeService)
+    participant WQ1 as WorkQueue 1<br/>(Application Layer)
+    participant WQ2 as WorkQueue 2<br/>(Application Layer)
+    participant WQ3 as WorkQueue 3<br/>(Application Layer)
+    participant WQ4 as WorkQueue 4<br/>(Application Layer)
+    participant REPO as Repository<br/>(Infrastructure Adapters)
     participant DB as Oracle DB<br/>(Tablas Control)
     participant GW as Oracle DB<br/>(Guidewire Replica)
     participant AZURE as Azure Massive<br/>Download API
     participant MQ as RabbitMQ
 
-    Note over APP,MQ: FASE 1: SOLICITUD DE GENERACIÓN
+    Note over APP,MQ: FASE 1: SOLICITUD DE GENERACIÓN (CAPA APPLICATION)
 
     APP->>API: POST /v1/he/invoices/{invoiceNumber}/chargedetail/report
-    API->>DB: INSERT registro principal (estado=1, lock=0)
-    DB-->>API: OK
+    API->>CMD: Invocar comando GenerateDetailCharge
+    CMD->>SVC: Ejecutar lógica de dominio
+    SVC->>REPO: Comando: Insertar registro principal
+    REPO->>DB: INSERT registro (estado=1, lock=0)
+    DB-->>REPO: OK
+    REPO-->>SVC: Confirmación
+    SVC-->>CMD: Registro creado
+    CMD-->>API: Respuesta exitosa
     API-->>APP: 200 OK - Solicitud registrada
 
-    Note over APP,MQ: FASE 2: PROCESAMIENTO ASÍNCRONO (WORK QUEUES)
+    Note over APP,MQ: FASE 2: PROCESAMIENTO ASÍNCRONO (SCHEDULED JOBS - QUARTZ)
 
-    Note over WQ1: Se ejecuta cada hora (Quartz)
-    WQ1->>DB: SELECT principal WHERE estado=1 AND lock=0
-    WQ1->>DB: UPDATE lock=1, estado=2 (procesando)
-    WQ1->>GW: INSERT SELECT - Consulta masiva de datos BC/PC
-    GW-->>WQ1: Datos de factura, coberturas, asegurados
-    WQ1->>DB: INSERT datos en tabla detalle
-    WQ1->>AZURE: POST /create-header (cabecera del archivo)
-    AZURE-->>WQ1: 201 Created - Header ID
-    WQ1->>DB: UPDATE estado=3, registrar headerID
+    Note over WQ1: WorkQueue 1 - Job programado ejecutado cada hora vía Quartz
+    WQ1->>SVC: Solicitar registros pendientes (Query Port)
+    SVC->>REPO: Query: SELECT WHERE estado=1 AND lock=0
+    REPO->>DB: Consulta registros pendientes
+    DB-->>REPO: Lista de facturas
+    REPO-->>SVC: DTOs de dominio
+    SVC-->>WQ1: Facturas para procesar
+    
+    WQ1->>SVC: Actualizar lock (Command Port)
+    SVC->>REPO: Command: UPDATE lock=1, estado=2
+    REPO->>DB: Actualizar estado
+    
+    WQ1->>SVC: Cargar datos de Guidewire
+    SVC->>REPO: Query: INSERT SELECT masivo BC/PC
+    REPO->>GW: Consulta masiva de datos
+    GW-->>REPO: Datos de factura, coberturas, asegurados
+    REPO->>DB: INSERT datos en tabla detalle
+    
+    WQ1->>SVC: Crear cabecera en Azure
+    SVC->>AZURE: POST /create-header (vía Service)
+    AZURE-->>SVC: 201 Created - Header ID
+    SVC->>REPO: Command: UPDATE estado=3, headerID
+    REPO->>DB: Actualizar estado
 
-    Note over WQ2: Se ejecuta cada hora (Quartz)
-    WQ2->>DB: SELECT items WHERE estado=3 AND lock=0
-    WQ2->>DB: UPDATE lock=1
-    loop Procesamiento por lotes (bloques configurables)
-        WQ2->>DB: SELECT lote de registros de detalle
-        WQ2->>WQ2: Construir contenido del bloque
-        WQ2->>AZURE: POST /upload-content (bloque de registros)
-        AZURE-->>WQ2: 200 OK - Bloque enviado
-        WQ2->>DB: Marcar registros como enviados
+    Note over WQ2: WorkQueue 2 - Job programado ejecutado cada hora vía Quartz
+    WQ2->>SVC: Obtener items para procesar
+    SVC->>REPO: Query: SELECT WHERE estado=3 AND lock=0
+    REPO->>DB: Consulta items listos
+    DB-->>REPO: Lista de items
+    REPO-->>SVC: DTOs de dominio
+    
+    WQ2->>SVC: Actualizar lock
+    SVC->>REPO: Command: UPDATE lock=1
+    
+    loop Procesamiento por lotes (Batch Pattern)
+        WQ2->>SVC: Obtener lote de registros
+        SVC->>REPO: Query: SELECT lote LIMIT batchSize
+        REPO->>DB: Consulta lote
+        DB-->>REPO: Registros del lote
+        REPO-->>SVC: DTOs del lote
+        
+        WQ2->>WQ2: Construir contenido (Provider Pattern)
+        WQ2->>SVC: Enviar bloque a Azure
+        SVC->>AZURE: POST /upload-content (vía Service)
+        AZURE-->>SVC: 200 OK - Bloque enviado
+        SVC->>REPO: Command: UPDATE enviado=1
+        REPO->>DB: Marcar registros enviados
     end
-    WQ2->>DB: UPDATE estado=4 cuando todos los bloques están enviados
+    
+    WQ2->>SVC: Verificar completitud
+    SVC->>REPO: Query: COUNT registros pendientes
+    alt Todos los bloques enviados
+        WQ2->>SVC: Actualizar estado final
+        SVC->>REPO: Command: UPDATE estado=4, lock=0
+    end
 
-    Note over WQ3: Se ejecuta cada hora (Quartz)
-    WQ3->>DB: SELECT principal WHERE estado=4 AND lock=0
-    WQ3->>DB: UPDATE lock=1
-    WQ3->>AZURE: POST /close-file (cerrar archivo)
-    AZURE-->>WQ3: 200 OK - Archivo cerrado
-    WQ3->>AZURE: GET /download-url (obtener URL de descarga)
-    AZURE-->>WQ3: 200 OK - URL del archivo
-    WQ3->>DB: UPDATE estado=5, registrar URL
-    WQ3->>MQ: PUBLISH evento cambio de estado
-    MQ-->>APP: Notificación: Reporte listo para descarga
+    Note over WQ3: WorkQueue 3 - Job programado ejecutado cada hora vía Quartz
+    WQ3->>SVC: Obtener archivos para cerrar
+    SVC->>REPO: Query: SELECT WHERE estado=4 AND lock=0
+    REPO->>DB: Consulta archivos listos
+    
+    WQ3->>SVC: Cerrar archivo en Azure
+    SVC->>AZURE: POST /close-file
+    AZURE-->>SVC: 200 OK - Archivo cerrado
+    
+    WQ3->>SVC: Obtener URL de descarga
+    SVC->>AZURE: GET /download-url
+    AZURE-->>SVC: 200 OK - URL del archivo
+    
+    WQ3->>SVC: Actualizar estado y URL
+    SVC->>REPO: Command: UPDATE estado=5, url
+    REPO->>DB: Guardar estado completado
+    
+    WQ3->>SVC: Publicar evento (Domain Event)
+    SVC->>MQ: PUBLISH evento cambio de estado
+    MQ-->>APP: Notificación: Reporte listo
 
-    Note over WQ4: Se ejecuta una vez al día (Quartz)
-    WQ4->>DB: DELETE registros antiguos (> 30 días)
-    DB-->>WQ4: OK - Limpieza completada
+    Note over WQ4: WorkQueue 4 - Job programado ejecutado diariamente vía Quartz
+    WQ4->>SVC: Solicitar limpieza de antiguos
+    SVC->>REPO: Command: DELETE registros > 30 días
+    REPO->>DB: DELETE registros antiguos
+    DB-->>REPO: OK - Limpieza completada
 
-    Note over APP,MQ: FASE 3: CONSULTA Y DESCARGA
+    Note over APP,MQ: FASE 3: CONSULTA Y DESCARGA (QUERY LAYER)
 
     APP->>API: GET /v1/he/invoices/{invoiceNumber}/chargedetail/report
-    API->>DB: SELECT estado, URL WHERE invoiceNumber
-    DB-->>API: estado=5, URL del archivo
-    API->>AZURE: GET URL de descarga
-    AZURE-->>API: Archivo CSV/TXT
+    API->>CMD: Invocar query GetDetailCharge
+    CMD->>SVC: Consultar estado (Query Port)
+    SVC->>REPO: Query: SELECT estado, URL
+    REPO->>DB: Consulta estado
+    DB-->>REPO: estado=5, URL
+    REPO-->>SVC: DTO con estado y URL
+    SVC-->>CMD: Información del reporte
+    CMD->>AZURE: GET URL de descarga
+    AZURE-->>CMD: Archivo CSV/TXT
+    CMD-->>API: Archivo del reporte
     API-->>APP: 200 OK - Archivo descargado
 ```
 
@@ -112,51 +185,105 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant CRON as Quartz Scheduler
-    participant WQ1 as WorkQueue 1<br/>Processor
+    participant WQ1 as WorkQueue1Processor<br/>(Application Layer)
+    participant SVC as DetailChargeService<br/>(Domain Layer)
+    participant PORT_Q as QueryPort<br/>(Domain Interface)
+    participant PORT_C as CommandPort<br/>(Domain Interface)
+    participant REPO_Q as QueryRepository<br/>(Infrastructure)
+    participant REPO_C as CommandRepository<br/>(Infrastructure)
+    participant MAPPER as Domain Mapper<br/>(Infrastructure)
     participant DB as Oracle DB<br/>(Control)
     participant GW as Oracle DB<br/>(Guidewire)
     participant AZURE as Azure Massive<br/>Download API
 
     Note over CRON,AZURE: WORKQUEUE 1: CONSULTA DE DATOS Y CREACIÓN DE CABECERA
 
-    CRON->>WQ1: Trigger (cada hora)
-    WQ1->>DB: SELECT * FROM principal<br/>WHERE estado=1 AND lock=0
+    CRON->>WQ1: Trigger cada hora (Quartz Scheduler)
+    
+    Note over WQ1,SVC: Paso 1: Consultar registros pendientes (Query)
+    WQ1->>SVC: obtenerRegistrosPendientes()
+    SVC->>PORT_Q: findPendingReports()
+    PORT_Q->>REPO_Q: Implementación del Query Port
+    REPO_Q->>DB: SELECT * FROM principal<br/>WHERE estado=1 AND lock=0
     
     alt No hay registros pendientes
-        DB-->>WQ1: Empty result
-        WQ1->>WQ1: Finalizar (sin procesamiento)
+        DB-->>REPO_Q: Empty result
+        REPO_Q-->>PORT_Q: Lista vacía
+        PORT_Q-->>SVC: Sin registros
+        SVC-->>WQ1: Sin trabajo pendiente
+        WQ1->>WQ1: Finalizar ejecución
     else Hay registros para procesar
-        DB-->>WQ1: Lista de facturas pendientes
+        DB-->>REPO_Q: Lista de facturas pendientes
+        REPO_Q->>MAPPER: Entity → Domain Model
+        MAPPER-->>REPO_Q: Domain DTOs
+        REPO_Q-->>PORT_Q: DTOs de dominio
+        PORT_Q-->>SVC: Lista de reportes pendientes
+        SVC-->>WQ1: Facturas a procesar
         
         loop Para cada factura
-            WQ1->>DB: UPDATE lock=1, estado=2<br/>WHERE invoiceNumber
+            Note over WQ1,SVC: Paso 2: Actualizar lock y estado (Command)
+            WQ1->>SVC: actualizarEstadoProcesando(invoiceNumber)
+            SVC->>PORT_C: updateLockAndStatus(id, lock=1, estado=2)
+            PORT_C->>REPO_C: Implementación del Command Port
+            REPO_C->>MAPPER: Domain → Entity
+            MAPPER-->>REPO_C: Data Entity
+            REPO_C->>DB: UPDATE lock=1, estado=2<br/>WHERE invoiceNumber
+            DB-->>REPO_C: OK
+            REPO_C-->>PORT_C: Actualización exitosa
+            PORT_C-->>SVC: Estado actualizado
             
-            Note over WQ1,GW: CONSULTA MASIVA DE DATOS (INSERT SELECT)
-            WQ1->>GW: INSERT INTO detalle<br/>SELECT * FROM bc.*, pc.*<br/>WHERE invoiceNumber<br/>(OPERACIÓN PESADA)
+            Note over WQ1,GW: Paso 3: CONSULTA MASIVA DE DATOS (INSERT SELECT)
+            WQ1->>SVC: cargarDatosGuidewire(invoiceNumber)
+            SVC->>PORT_C: insertDetailDataFromGuidewire(invoiceNumber)
+            PORT_C->>REPO_C: Implementación con query nativa
+            REPO_C->>GW: INSERT INTO detalle<br/>SELECT bc.*, pc.*<br/>FROM BillingCenter bc, PolicyCenter pc<br/>WHERE invoiceNumber<br/>(⚠️ OPERACIÓN PESADA)
             
             alt Consulta exitosa
-                GW-->>WQ1: X registros insertados
+                GW-->>REPO_C: X registros insertados
+                REPO_C-->>PORT_C: Datos cargados exitosamente
+                PORT_C-->>SVC: {totalRecords}
                 
-                Note over WQ1,AZURE: CREACIÓN DE CABECERA EN AZURE
-                WQ1->>WQ1: Generar request de cabecera<br/>(nombre archivo, metadata)
-                WQ1->>AZURE: POST /create-header<br/>{ fileName, metadata }
+                Note over WQ1,AZURE: Paso 4: CREACIÓN DE CABECERA EN AZURE
+                WQ1->>SVC: crearCabeceraArchivo(invoiceNumber)
+                SVC->>SVC: Provider: generarMetadataCabecera()
+                SVC->>AZURE: POST /create-header<br/>{ fileName, metadata }
                 
-                alt Cabecera creada
-                    AZURE-->>WQ1: 201 Created<br/>{ headerID, status }
-                    WQ1->>DB: UPDATE estado=3, headerID<br/>WHERE invoiceNumber
+                alt Cabecera creada exitosamente
+                    AZURE-->>SVC: 201 Created<br/>{ headerID, status }
+                    
+                    Note over SVC,DB: Paso 5: Persistir headerID (Command)
+                    SVC->>PORT_C: updateHeaderId(invoiceNumber, headerID, estado=3)
+                    PORT_C->>REPO_C: Actualizar registro
+                    REPO_C->>MAPPER: Domain → Entity
+                    REPO_C->>DB: UPDATE estado=3, headerID, lock=0<br/>WHERE invoiceNumber
+                    DB-->>REPO_C: OK
+                    REPO_C-->>PORT_C: Confirmación
+                    PORT_C-->>SVC: HeaderID guardado
+                    SVC-->>WQ1: Factura lista para WQ2
+                    
                 else Error en Azure
-                    AZURE-->>WQ1: 500 Internal Error
-                    WQ1->>DB: UPDATE estado=ERROR<br/>WHERE invoiceNumber
+                    AZURE-->>SVC: 500 Internal Error
+                    SVC->>PORT_C: updateStatus(invoiceNumber, estado=ERROR)
+                    PORT_C->>REPO_C: Marcar error
+                    REPO_C->>DB: UPDATE estado=ERROR, lock=0
+                    SVC-->>WQ1: Error registrado
                     WQ1->>WQ1: Log error y continuar
                 end
                 
-            else Error en consulta masiva
-                GW-->>WQ1: SQL Exception<br/>(timeout, recursos)
-                WQ1->>DB: UPDATE estado=ERROR, lock=0<br/>WHERE invoiceNumber
-                WQ1->>WQ1: Log error crítico
+            else Error en consulta masiva (Timeout/Recursos)
+                GW-->>REPO_C: SQL Exception<br/>(timeout, out of memory)
+                REPO_C-->>PORT_C: Error en carga de datos
+                PORT_C-->>SVC: Excepción de infraestructura
+                SVC->>PORT_C: updateStatus(invoiceNumber, estado=ERROR, lock=0)
+                PORT_C->>REPO_C: Marcar error y liberar lock
+                REPO_C->>DB: UPDATE estado=ERROR, lock=0
+                SVC-->>WQ1: Error crítico
+                WQ1->>WQ1: Log error detallado
             end
         end
     end
+    
+    Note over WQ1: Fin de ejecución programada
 ```
 
 ### 3. Flujo Detallado: WorkQueue 2 - Construcción y Envío de Bloques
@@ -164,65 +291,138 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant CRON as Quartz Scheduler
-    participant WQ2 as WorkQueue 2<br/>Processor
+    participant WQ2 as WorkQueue2Processor<br/>(Application Layer)
+    participant SVC as DetailChargeService<br/>(Domain Layer)
+    participant PROV as ContentProvider<br/>(Domain Provider)
+    participant PORT_Q as QueryPort<br/>(Domain Interface)
+    participant PORT_C as CommandPort<br/>(Domain Interface)
+    participant REPO_Q as QueryRepository<br/>(Infrastructure)
+    participant REPO_C as CommandRepository<br/>(Infrastructure)
+    participant MAPPER as Domain Mapper
     participant DB as Oracle DB<br/>(Control)
     participant AZURE as Azure Massive<br/>Download API
 
     Note over CRON,AZURE: WORKQUEUE 2: CONSTRUCCIÓN Y ENVÍO DE CONTENIDO
 
-    CRON->>WQ2: Trigger (cada hora)
+    CRON->>WQ2: Trigger cada hora (Quartz Scheduler)
     
-    Note over WQ2: SUB-WORKQUEUE 2.1: Actualizar Lock
-    WQ2->>DB: SELECT * FROM principal<br/>WHERE estado=3 AND lock=0
+    Note over WQ2,SVC: Sub-WorkQueue 2.1: Actualizar Lock (Command)
+    WQ2->>SVC: obtenerItemsListosParaEnvio()
+    SVC->>PORT_Q: findItemsReadyToSend(estado=3, lock=0)
+    PORT_Q->>REPO_Q: Query implementation
+    REPO_Q->>DB: SELECT * FROM principal<br/>WHERE estado=3 AND lock=0
     
     alt No hay registros listos
-        DB-->>WQ2: Empty result
-        WQ2->>WQ2: Finalizar
+        DB-->>REPO_Q: Empty result
+        REPO_Q-->>PORT_Q: Lista vacía
+        PORT_Q-->>SVC: Sin items
+        SVC-->>WQ2: Nada que procesar
+        WQ2->>WQ2: Finalizar ejecución
     else Hay registros para procesar
-        DB-->>WQ2: Lista de facturas con datos cargados
-        WQ2->>DB: UPDATE lock=1<br/>WHERE invoiceNumber IN (...)
+        DB-->>REPO_Q: Lista de facturas con datos cargados
+        REPO_Q->>MAPPER: Entity → Domain Model
+        MAPPER-->>REPO_Q: Domain DTOs
+        REPO_Q-->>PORT_Q: DTOs
+        PORT_Q-->>SVC: Items a procesar
+        SVC-->>WQ2: Facturas con datos listos
+        
+        WQ2->>SVC: actualizarLockItems(invoiceNumbers)
+        SVC->>PORT_C: updateLock(ids, lock=1)
+        PORT_C->>REPO_C: Command implementation
+        REPO_C->>DB: UPDATE lock=1<br/>WHERE invoiceNumber IN (...)
+        DB-->>REPO_C: OK
     end
 
-    Note over WQ2: SUB-WORKQUEUE 2.2: Procesar Items
+    Note over WQ2,AZURE: Sub-WorkQueue 2.2: Procesar Items (Batch Pattern)
 
     loop Para cada factura (procesamiento paralelo)
-        WQ2->>DB: SELECT COUNT(*) FROM detalle<br/>WHERE invoiceNumber
-        DB-->>WQ2: totalRegistros
+        Note over WQ2,SVC: Consultar total de registros (Query)
+        WQ2->>SVC: obtenerTotalRegistros(invoiceNumber)
+        SVC->>PORT_Q: countDetailRecords(invoiceNumber)
+        PORT_Q->>REPO_Q: Query count
+        REPO_Q->>DB: SELECT COUNT(*) FROM detalle<br/>WHERE invoiceNumber
+        DB-->>REPO_Q: totalRegistros
+        REPO_Q-->>PORT_Q: count
+        PORT_Q-->>SVC: total
+        SVC-->>WQ2: {totalRegistros}
         
-        WQ2->>DB: SELECT * FROM detalle<br/>WHERE invoiceNumber AND enviado=0<br/>LIMIT batchSize
-        DB-->>WQ2: Lote de registros
+        Note over WQ2,SVC: Obtener lote de registros pendientes (Query)
+        WQ2->>SVC: obtenerLotePendiente(invoiceNumber, batchSize)
+        SVC->>PORT_Q: findPendingDetailBatch(invoiceNumber, enviado=0, limit)
+        PORT_Q->>REPO_Q: Query with pagination
+        REPO_Q->>DB: SELECT * FROM detalle<br/>WHERE invoiceNumber AND enviado=0<br/>LIMIT batchSize
+        DB-->>REPO_Q: Lote de registros
+        REPO_Q->>MAPPER: Entity → Domain Model
+        MAPPER-->>REPO_Q: Domain DTOs
+        REPO_Q-->>PORT_Q: Lote en domain
+        PORT_Q-->>SVC: DTOs del lote
+        SVC-->>WQ2: Registros a enviar
         
         alt Hay registros para enviar
-            WQ2->>WQ2: Construir contenido del bloque<br/>(mapeo a formato CSV/TXT)
+            Note over WQ2,PROV: Construir contenido del bloque (Provider Pattern)
+            WQ2->>PROV: buildBlockContent(detailRecords)
+            PROV->>PROV: Aplicar reglas de negocio<br/>(formato CSV, coberturas, etc.)
+            PROV-->>WQ2: Contenido formateado
             
-            WQ2->>WQ2: Generar request para Azure<br/>(headerID, bloque de datos)
-            
-            WQ2->>AZURE: POST /upload-content<br/>{ headerID, content }
+            Note over WQ2,AZURE: Enviar bloque a Azure
+            WQ2->>SVC: enviarBloqueAzure(headerID, content)
+            SVC->>AZURE: POST /upload-content<br/>{ headerID, content }
             
             alt Bloque enviado exitosamente
-                AZURE-->>WQ2: 200 OK
-                WQ2->>DB: UPDATE enviado=1<br/>WHERE registros del lote
+                AZURE-->>SVC: 200 OK
+                SVC-->>WQ2: Bloque confirmado
+                
+                Note over WQ2,SVC: Marcar registros como enviados (Command)
+                WQ2->>SVC: marcarRegistrosEnviados(recordIds)
+                SVC->>PORT_C: updateSentStatus(ids, enviado=1)
+                PORT_C->>REPO_C: Command implementation
+                REPO_C->>MAPPER: Domain → Entity
+                REPO_C->>DB: UPDATE enviado=1<br/>WHERE id IN (lote)
+                DB-->>REPO_C: OK
+                REPO_C-->>PORT_C: Actualización exitosa
+                PORT_C-->>SVC: Registros marcados
                 
                 Note over WQ2: ⚠️ PROBLEMA CONOCIDO: DUPLICACIÓN
-                Note over WQ2: En producción, ocasionalmente<br/>los registros se envían dos veces
+                Note over WQ2: En producción, ocasionalmente<br/>los registros se envían dos veces<br/>si falla entre POST Azure y UPDATE DB
                 
-            else Error en envío
-                AZURE-->>WQ2: 500 Internal Error
-                WQ2->>DB: UPDATE intentos=intentos+1<br/>WHERE registros del lote
+            else Error en envío a Azure
+                AZURE-->>SVC: 500 Internal Error
+                SVC-->>WQ2: Error en envío
+                
+                Note over WQ2,SVC: Incrementar contador de intentos (Command)
+                WQ2->>SVC: incrementarIntentos(recordIds)
+                SVC->>PORT_C: incrementRetries(ids)
+                PORT_C->>REPO_C: Command implementation
+                REPO_C->>DB: UPDATE intentos=intentos+1<br/>WHERE id IN (lote)
                 WQ2->>WQ2: Log error y continuar
             end
             
-            WQ2->>DB: SELECT COUNT(*) FROM detalle<br/>WHERE invoiceNumber AND enviado=0
+            Note over WQ2,SVC: Verificar si todos los registros fueron enviados (Query)
+            WQ2->>SVC: verificarCompletitud(invoiceNumber)
+            SVC->>PORT_Q: countPendingDetails(invoiceNumber, enviado=0)
+            PORT_Q->>REPO_Q: Query count
+            REPO_Q->>DB: SELECT COUNT(*) FROM detalle<br/>WHERE invoiceNumber AND enviado=0
+            DB-->>REPO_Q: count
+            REPO_Q-->>PORT_Q: pendientes
+            PORT_Q-->>SVC: cantidad pendiente
+            SVC-->>WQ2: {pendientes}
             
             alt Todos los registros enviados
-                DB-->>WQ2: count=0
-                WQ2->>DB: UPDATE estado=4, lock=0<br/>WHERE invoiceNumber
+                WQ2->>SVC: finalizarEnvio(invoiceNumber)
+                SVC->>PORT_C: updateStatusComplete(id, estado=4, lock=0)
+                PORT_C->>REPO_C: Command implementation
+                REPO_C->>DB: UPDATE estado=4, lock=0<br/>WHERE invoiceNumber
+                DB-->>REPO_C: OK
+                REPO_C-->>PORT_C: Estado actualizado
+                PORT_C-->>SVC: Completado
+                SVC-->>WQ2: Factura lista para WQ3
             else Aún hay registros pendientes
-                DB-->>WQ2: count>0
-                WQ2->>WQ2: Procesará en siguiente ejecución
+                WQ2->>WQ2: Se procesará en siguiente ejecución
             end
         end
     end
+    
+    Note over WQ2: Fin de ejecución programada
 ```
 
 ### 4. Flujo Detallado: WorkQueue 3 - Cierre de Archivo y Notificación
@@ -230,7 +430,13 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant CRON as Quartz Scheduler
-    participant WQ3 as WorkQueue 3<br/>Processor
+    participant WQ3 as WorkQueue3Processor<br/>(Application Layer)
+    participant SVC as DetailChargeService<br/>(Domain Layer)
+    participant PORT_Q as QueryPort<br/>(Domain Interface)
+    participant PORT_C as CommandPort<br/>(Domain Interface)
+    participant REPO_Q as QueryRepository<br/>(Infrastructure)
+    participant REPO_C as CommandRepository<br/>(Infrastructure)
+    participant MAPPER as Domain Mapper
     participant DB as Oracle DB<br/>(Control)
     participant AZURE as Azure Massive<br/>Download API
     participant MQ as RabbitMQ
@@ -238,51 +444,97 @@ sequenceDiagram
 
     Note over CRON,APP: WORKQUEUE 3: CIERRE Y NOTIFICACIÓN
 
-    CRON->>WQ3: Trigger (cada hora)
-    WQ3->>DB: SELECT * FROM principal<br/>WHERE estado=4 AND lock=0
+    CRON->>WQ3: Trigger cada hora (Quartz Scheduler)
+    
+    Note over WQ3,SVC: Paso 1: Consultar archivos para cerrar (Query)
+    WQ3->>SVC: obtenerArchivosParaCerrar()
+    SVC->>PORT_Q: findFilesToClose(estado=4, lock=0)
+    PORT_Q->>REPO_Q: Query implementation
+    REPO_Q->>DB: SELECT * FROM principal<br/>WHERE estado=4 AND lock=0
     
     alt No hay archivos para cerrar
-        DB-->>WQ3: Empty result
-        WQ3->>WQ3: Finalizar
+        DB-->>REPO_Q: Empty result
+        REPO_Q-->>PORT_Q: Lista vacía
+        PORT_Q-->>SVC: Sin archivos
+        SVC-->>WQ3: Nada que procesar
+        WQ3->>WQ3: Finalizar ejecución
     else Hay archivos para cerrar
-        DB-->>WQ3: Lista de facturas con bloques enviados
+        DB-->>REPO_Q: Lista de facturas con bloques enviados
+        REPO_Q->>MAPPER: Entity → Domain Model
+        MAPPER-->>REPO_Q: Domain DTOs
+        REPO_Q-->>PORT_Q: DTOs
+        PORT_Q-->>SVC: Archivos a cerrar
+        SVC-->>WQ3: Facturas listas
         
         loop Para cada factura (procesamiento paralelo)
-            WQ3->>WQ3: Generar request de cierre<br/>(headerID)
+            Note over WQ3,SVC: Paso 2: Actualizar lock (Command)
+            WQ3->>SVC: actualizarLock(invoiceNumber)
+            SVC->>PORT_C: updateLock(id, lock=1)
+            PORT_C->>REPO_C: Command implementation
+            REPO_C->>DB: UPDATE lock=1<br/>WHERE invoiceNumber
             
-            Note over WQ3,AZURE: CIERRE DE ARCHIVO EN AZURE
-            WQ3->>AZURE: POST /close-file<br/>{ headerID }
+            Note over WQ3,AZURE: Paso 3: CIERRE DE ARCHIVO EN AZURE
+            WQ3->>SVC: cerrarArchivoAzure(headerID)
+            SVC->>AZURE: POST /close-file<br/>{ headerID }
             
             alt Archivo cerrado exitosamente
-                AZURE-->>WQ3: 200 OK<br/>{ status: 'closed' }
+                AZURE-->>SVC: 200 OK<br/>{ status: 'closed' }
+                SVC-->>WQ3: Archivo cerrado
                 
-                Note over WQ3,AZURE: OBTENER URL DE DESCARGA
-                WQ3->>WQ3: Generar request para obtener URL
-                WQ3->>AZURE: GET /download-url<br/>{ headerID }
+                Note over WQ3,AZURE: Paso 4: OBTENER URL DE DESCARGA
+                WQ3->>SVC: obtenerUrlDescarga(headerID)
+                SVC->>AZURE: GET /download-url<br/>{ headerID }
                 
-                alt URL obtenida
-                    AZURE-->>WQ3: 200 OK<br/>{ downloadUrl, expiresAt }
-                    WQ3->>DB: UPDATE estado=5, url, expiresAt<br/>WHERE invoiceNumber
+                alt URL obtenida exitosamente
+                    AZURE-->>SVC: 200 OK<br/>{ downloadUrl, expiresAt }
+                    SVC-->>WQ3: {url, expiresAt}
                     
-                    Note over WQ3,MQ: NOTIFICACIÓN VÍA RABBITMQ
-                    WQ3->>WQ3: Construir mensaje de evento<br/>{ invoiceNumber, status, url }
-                    WQ3->>MQ: PUBLISH evento<br/>exchange: sura.seguros.vidagrupo.chargedetail.ex<br/>routingKey: sura.seguros.vidagrupo.chargedetail.risk
+                    Note over WQ3,SVC: Paso 5: Persistir URL y estado (Command)
+                    WQ3->>SVC: actualizarUrlYEstado(invoiceNumber, url, expiresAt)
+                    SVC->>PORT_C: updateUrlAndStatus(id, url, expiresAt, estado=5, lock=0)
+                    PORT_C->>REPO_C: Command implementation
+                    REPO_C->>MAPPER: Domain → Entity
+                    REPO_C->>DB: UPDATE estado=5, url, expiresAt, lock=0<br/>WHERE invoiceNumber
+                    DB-->>REPO_C: OK
+                    REPO_C-->>PORT_C: Actualización exitosa
+                    PORT_C-->>SVC: Estado actualizado
+                    
+                    Note over WQ3,MQ: Paso 6: NOTIFICACIÓN VÍA RABBITMQ (Domain Event)
+                    WQ3->>SVC: publicarEventoCambioEstado(invoiceNumber)
+                    SVC->>SVC: Construir evento de dominio<br/>DetailChargeCompletedEvent
+                    SVC->>MQ: PUBLISH evento<br/>exchange: sura.seguros.vidagrupo.chargedetail.ex<br/>routingKey: sura.seguros.vidagrupo.chargedetail.risk<br/>{ invoiceNumber, status, url, expiresAt }
                     MQ->>APP: Entregar evento a consumidores
                     APP-->>MQ: ACK (confirmación recepción)
+                    MQ-->>SVC: Evento publicado
+                    SVC-->>WQ3: Notificación enviada
                     
                 else Error al obtener URL
-                    AZURE-->>WQ3: 404 Not Found / 500 Error
-                    WQ3->>DB: UPDATE estado=ERROR<br/>WHERE invoiceNumber
+                    AZURE-->>SVC: 404 Not Found / 500 Error
+                    SVC-->>WQ3: Error en obtención de URL
+                    
+                    Note over WQ3,SVC: Marcar como error (Command)
+                    WQ3->>SVC: marcarError(invoiceNumber)
+                    SVC->>PORT_C: updateStatus(id, estado=ERROR, lock=0)
+                    PORT_C->>REPO_C: Command implementation
+                    REPO_C->>DB: UPDATE estado=ERROR, lock=0
                     WQ3->>WQ3: Log error
                 end
                 
             else Error al cerrar archivo
-                AZURE-->>WQ3: 500 Internal Error
-                WQ3->>DB: UPDATE estado=ERROR<br/>WHERE invoiceNumber
+                AZURE-->>SVC: 500 Internal Error
+                SVC-->>WQ3: Error en cierre
+                
+                Note over WQ3,SVC: Marcar como error (Command)
+                WQ3->>SVC: marcarError(invoiceNumber)
+                SVC->>PORT_C: updateStatus(id, estado=ERROR, lock=0)
+                PORT_C->>REPO_C: Command implementation
+                REPO_C->>DB: UPDATE estado=ERROR, lock=0
                 WQ3->>WQ3: Log error crítico
             end
         end
     end
+    
+    Note over WQ3: Fin de ejecución programada
 ```
 
 ### 5. Flujo de Consulta y Descarga
@@ -344,15 +596,15 @@ sequenceDiagram
 ```mermaid
 stateDiagram-v2
     [*] --> Registrado: POST solicitud de generación
-    Registrado --> Procesando_WQ1: WorkQueue 1 inicia
+    Registrado --> Procesando_WQ1: Job Quartz WQ1 inicia
     Procesando_WQ1 --> Datos_Cargados: Consulta masiva OK + Cabecera creada
     Procesando_WQ1 --> Error: Fallo en consulta o Azure
     
-    Datos_Cargados --> Enviando_Bloques: WorkQueue 2 inicia
+    Datos_Cargados --> Enviando_Bloques: Job Quartz WQ2 inicia
     Enviando_Bloques --> Bloques_Enviados: Todos los bloques enviados
     Enviando_Bloques --> Error: Error en envío de bloques
     
-    Bloques_Enviados --> Cerrando_Archivo: WorkQueue 3 inicia
+    Bloques_Enviados --> Cerrando_Archivo: Job Quartz WQ3 inicia
     Cerrando_Archivo --> Completado: Archivo cerrado + URL obtenida
     Cerrando_Archivo --> Error: Error al cerrar o obtener URL
     
@@ -361,7 +613,7 @@ stateDiagram-v2
     
     Error --> Registrado: Usuario reintenta (nueva solicitud)
     Expirado --> [*]
-    Descargado --> Limpiado: WorkQueue 4 (después de 30 días)
+    Descargado --> Limpiado: Job Quartz WQ4 (después de 30 días)
     Limpiado --> [*]
 
     note right of Registrado
@@ -393,18 +645,18 @@ stateDiagram-v2
 
 ### Tabla de Estados
 
-| Estado                  | Código | Lock | Descripción                                     | Work Queue Responsable | Siguiente Estado                  |
-| ----------------------- | ------ | ---- | ----------------------------------------------- | ---------------------- | --------------------------------- |
-| **Registrado**          | 1      | 0    | Solicitud registrada, pendiente de procesar     | -                      | Procesando_WQ1                    |
-| **Procesando WQ1**      | 2      | 1    | Consultando datos y creando cabecera            | WorkQueue 1            | Datos_Cargados / Error            |
-| **Datos Cargados**      | 3      | 0    | Datos en DB, cabecera creada, listo para envío  | WorkQueue 1            | Enviando_Bloques                  |
-| **Enviando Bloques**    | 3      | 1    | Enviando bloques de contenido a Azure           | WorkQueue 2            | Bloques_Enviados / Error          |
-| **Bloques Enviados**    | 4      | 0    | Todos los bloques enviados, listo para cierre   | WorkQueue 2            | Cerrando_Archivo                  |
-| **Cerrando Archivo**    | 4      | 1    | Cerrando archivo y obteniendo URL               | WorkQueue 3            | Completado / Error                |
-| **Completado**          | 5      | 0    | Archivo listo para descarga                     | WorkQueue 3            | Descargado / Expirado             |
-| **Error**               | ERROR  | 0    | Error en procesamiento                          | Cualquiera             | Registrado (reintento manual)     |
-| **Expirado**            | EXPIRED| 0    | URL de descarga expirada                        | -                      | Fin                               |
-| **Limpiado**            | -      | -    | Registro eliminado de BD                        | WorkQueue 4            | -                                 |
+| Estado                  | Código | Lock | Descripción                                     | Job Programado Responsable | Siguiente Estado                  |
+| ----------------------- | ------ | ---- | ----------------------------------------------- | -------------------------- | --------------------------------- |
+| **Registrado**          | 1      | 0    | Solicitud registrada, pendiente de procesar     | -                          | Procesando_WQ1                    |
+| **Procesando WQ1**      | 2      | 1    | Consultando datos y creando cabecera            | WorkQueue 1 (Quartz)       | Datos_Cargados / Error            |
+| **Datos Cargados**      | 3      | 0    | Datos en DB, cabecera creada, listo para envío  | WorkQueue 1 (Quartz)       | Enviando_Bloques                  |
+| **Enviando Bloques**    | 3      | 1    | Enviando bloques de contenido a Azure           | WorkQueue 2 (Quartz)       | Bloques_Enviados / Error          |
+| **Bloques Enviados**    | 4      | 0    | Todos los bloques enviados, listo para cierre   | WorkQueue 2 (Quartz)       | Cerrando_Archivo                  |
+| **Cerrando Archivo**    | 4      | 1    | Cerrando archivo y obteniendo URL               | WorkQueue 3 (Quartz)       | Completado / Error                |
+| **Completado**          | 5      | 0    | Archivo listo para descarga                     | WorkQueue 3 (Quartz)       | Descargado / Expirado             |
+| **Error**               | ERROR  | 0    | Error en procesamiento                          | Cualquiera                 | Registrado (reintento manual)     |
+| **Expirado**            | EXPIRED| 0    | URL de descarga expirada                        | -                          | Fin                               |
+| **Limpiado**            | -      | -    | Registro eliminado de BD                        | WorkQueue 4 (Quartz - Daily) | -                               |
 
 ---
 
@@ -412,16 +664,24 @@ stateDiagram-v2
 
 ### Configuración del Flujo
 
-| Parámetro                            | Valor por Defecto | Descripción                                  | Impacto si se Cambia                                        |
-| ------------------------------------ | ----------------- | -------------------------------------------- | ----------------------------------------------------------- |
-| `workqueue.1.cron`                   | `0 0 * * * ?`     | Expresión cron WQ1 (cada hora)               | Frecuencia de inicio de procesamiento de nuevas solicitudes |
-| `workqueue.2.cron`                   | `0 0 * * * ?`     | Expresión cron WQ2 (cada hora)               | Frecuencia de envío de bloques a Azure                      |
-| `workqueue.2.batch.size`             | `2000`            | Tamaño de lote para envío de bloques         | Performance vs tamaño de bloques en Azure                   |
-| `workqueue.3.cron`                   | `0 0 * * * ?`     | Expresión cron WQ3 (cada hora)               | Frecuencia de cierre de archivos                            |
-| `workqueue.4.cron`                   | `0 0 0 * * ?`     | Expresión cron WQ4 (diaria a medianoche)     | Frecuencia de limpieza de registros antiguos                |
-| `workqueue.4.retention.days`         | `30`              | Días de retención de registros               | Espacio en disco vs histórico disponible                    |
-| `oracle.jdbc.maxTotal`               | `10`              | Conexiones máximas en pool de BD             | Concurrencia vs recursos de BD                              |
-| `azure.timeout.ms`                   | `60000`           | Timeout para llamadas a Azure API (60 seg)   | Tolerancia a latencia vs falsos timeouts                    |
+| Parámetro                            | Valor por Defecto | Descripción                                  | Impacto si se Cambia                                        | Capa Afectada           |
+| ------------------------------------ | ----------------- | -------------------------------------------- | ----------------------------------------------------------- | ----------------------- |
+| `workqueue.1.cron`                   | `0 0 * * * ?`     | Expresión cron para Job WQ1 (cada hora)      | Frecuencia de inicio de procesamiento de nuevas solicitudes | Infrastructure (Routes) |
+| `workqueue.2.cron`                   | `0 0 * * * ?`     | Expresión cron para Job WQ2 (cada hora)      | Frecuencia de envío de bloques a Azure                      | Infrastructure (Routes) |
+| `workqueue.2.batch.size`             | `2000`            | Tamaño de lote para envío de bloques         | Performance vs tamaño de bloques en Azure                   | Domain (Service)        |
+| `workqueue.3.cron`                   | `0 0 * * * ?`     | Expresión cron para Job WQ3 (cada hora)      | Frecuencia de cierre de archivos                            | Infrastructure (Routes) |
+| `workqueue.4.cron`                   | `0 0 0 * * ?`     | Expresión cron para Job WQ4 (diariamente)    | Frecuencia de limpieza de registros antiguos                | Infrastructure (Routes) |
+| `workqueue.4.retention.days`         | `30`              | Días de retención de registros               | Espacio en disco vs histórico disponible                    | Domain (Service)        |
+| `oracle.jdbc.maxTotal`               | `10`              | Conexiones máximas en pool de BD             | Concurrencia vs recursos de BD                              | Infrastructure (Config) |
+| `azure.timeout.ms`                   | `60000`           | Timeout para llamadas a Azure API (60 seg)   | Tolerancia a latencia vs falsos timeouts                    | Infrastructure (Config) |
+
+### Arquitectura de Capas y Responsabilidades
+
+| Capa                  | Responsabilidad                                                      | Ejemplos de Componentes                                 |
+| --------------------- | -------------------------------------------------------------------- | ------------------------------------------------------- |
+| **Application**       | Casos de uso (Commands/Queries), WorkQueue Processors (Jobs Quartz)  | `GenerateDetailChargeProcessor`, `WorkQueue1Processor`  |
+| **Domain**            | Lógica de negocio pura, Services, Ports (interfaces), Providers      | `DetailChargeService`, `ContentProvider`, Ports         |
+| **Infrastructure**    | Detalles técnicos, Repositories (implementations), Routes, Adapters  | `CommandRepository`, `QueryRepository`, Routes, Mappers |
 
 ### Message Queues Utilizadas
 
@@ -453,15 +713,16 @@ stateDiagram-v2
 
 ### Puntos Críticos de Medición
 
-| Métrica                                  | Componente          | Umbral Esperado | Acción si se Excede                         |
-| ---------------------------------------- | ------------------- | --------------- | ------------------------------------------- |
-| **Tiempo de consulta INSERT SELECT**    | WorkQueue 1         | < 5 minutos     | Revisar índices BD, optimizar query         |
-| **Tasa de éxito creación cabecera**      | WorkQueue 1 + Azure | > 95%           | Verificar conectividad Azure, credentials   |
-| **Tiempo de envío por bloque**           | WorkQueue 2 + Azure | < 30 segundos   | Reducir batch size, verificar red           |
-| **Tasa de duplicación de registros**     | WorkQueue 2         | 0%              | **CRÍTICO**: Investigar lógica de marcado   |
-| **Tiempo total del flujo (end-to-end)**  | Todo el sistema     | < 3 horas       | Revisar crons, paralelización, recursos BD  |
-| **Tasa de error en cierre de archivo**   | WorkQueue 3 + Azure | < 5%            | Verificar estado de Azure API               |
-| **Latencia de publicación RabbitMQ**     | WorkQueue 3 + MQ    | < 5 segundos    | Verificar salud de RabbitMQ, colas llenas   |
+| Métrica                                  | Componente          | Umbral Esperado | Acción si se Excede                         | Capa Afectada      |
+| ---------------------------------------- | ------------------- | --------------- | ------------------------------------------- | ------------------ |
+| **Tiempo de consulta INSERT SELECT**    | WorkQueue 1 (Application) | < 5 minutos     | Revisar índices BD, optimizar query         | Infrastructure/DB  |
+| **Tasa de éxito creación cabecera**      | WorkQueue 1 + Azure | > 95%           | Verificar conectividad Azure, credentials   | Domain Service     |
+| **Tiempo de envío por bloque**           | WorkQueue 2 + Azure | < 30 segundos   | Reducir batch size, verificar red           | Application/Domain |
+| **Tasa de duplicación de registros**     | WorkQueue 2         | 0%              | **CRÍTICO**: Implementar idempotencia       | Domain Service     |
+| **Tiempo total del flujo (end-to-end)**  | Todo el sistema     | < 3 horas       | Revisar crons, paralelización, recursos BD  | All Layers         |
+| **Tasa de error en cierre de archivo**   | WorkQueue 3 + Azure | < 5%            | Verificar estado de Azure API               | Domain Service     |
+| **Latencia de publicación RabbitMQ**     | WorkQueue 3 + MQ    | < 5 segundos    | Verificar salud de RabbitMQ, colas llenas   | Infrastructure     |
+| **Cobertura de tests unitarios**         | Todo el módulo detailcharge | > 85%   | Agregar tests para nuevo código            | All Layers (Tests) |
 
 ### Logs Críticos a Monitorear
 
@@ -795,35 +1056,47 @@ tail -f /var/log/vidagruporeportes-mi/vidagruporeportes-mi.log \
 
 ### Oportunidades de Mejora Identificadas
 
-1. **Implementar Idempotencia en WorkQueue 2 (CRÍTICA)**
-   - **Descripción**: Agregar lógica de idempotencia para evitar duplicación de registros al enviar bloques a Azure. Implementar columna `idempotency_key` única y validación antes de envío.
+1. **Implementar Idempotencia en WorkQueue 2 (CRÍTICA - Domain Layer)**
+   - **Descripción**: Agregar lógica de idempotencia en `DetailChargeService` para evitar duplicación de registros al enviar bloques a Azure. Implementar columna `idempotency_key` única y validación antes de envío en los `CommandPort`.
    - **Beneficio**: Eliminar completamente el problema de registros duplicados que ocurre intermitentemente en producción.
    - **Complejidad**: Media (2-3 semanas)
+   - **Capas afectadas**: Domain (Service, Port), Infrastructure (Repository, Data Entity)
 
-2. **Optimizar Consulta INSERT SELECT de WorkQueue 1**
-   - **Descripción**: Refactorizar la consulta masiva de Guidewire para usar hints de Oracle, índices optimizados, y posiblemente particionar en sub-lotes dinámicos basados en volumen de registros.
+2. **Optimizar Consulta INSERT SELECT de WorkQueue 1 (Infrastructure Layer)**
+   - **Descripción**: Refactorizar la consulta masiva de Guidewire en `QueryRepository` para usar hints de Oracle, índices optimizados, y posiblemente particionar en sub-lotes dinámicos basados en volumen de registros.
    - **Beneficio**: Reducir tiempo de WorkQueue 1 de 5 minutos a < 2 minutos para facturas grandes.
    - **Complejidad**: Alta (4-6 semanas, requiere análisis de DBA)
+   - **Capas afectadas**: Infrastructure (Repository), Domain (Service)
 
-3. **Implementar Circuit Breaker para Azure API**
-   - **Descripción**: Agregar patrón Circuit Breaker (usando Resilience4j) para evitar saturar Azure API cuando está degradada. Pausar WorkQueues automáticamente si la tasa de error supera 50%.
+3. **Implementar Circuit Breaker para Azure API (Domain Layer)**
+   - **Descripción**: Agregar patrón Circuit Breaker en `DetailChargeService` usando Resilience4j para evitar saturar Azure API cuando está degradada. Pausar WorkQueues automáticamente si la tasa de error supera 50%.
    - **Beneficio**: Mejorar resiliencia del sistema y evitar acumulación de errores cuando Azure está down.
    - **Complejidad**: Media (2 semanas)
+   - **Capas afectadas**: Domain (Service), Infrastructure (Config)
 
-4. **Agregar Retry con Backoff Exponencial**
-   - **Descripción**: Implementar reintentos automáticos con backoff exponencial para llamadas a Azure API en WorkQueues 1, 2 y 3.
+4. **Agregar Retry con Backoff Exponencial (Infrastructure Layer)**
+   - **Descripción**: Implementar reintentos automáticos con backoff exponencial en Routes de Camel para llamadas a Azure API en WorkQueues 1, 2 y 3.
    - **Beneficio**: Reducir falsos errores por problemas transitorios de red o Azure.
    - **Complejidad**: Baja (1 semana)
+   - **Capas afectadas**: Infrastructure (Routes)
 
-5. **Dashboard de Monitoreo en Tiempo Real**
+5. **Dashboard de Monitoreo en Tiempo Real (Observability)**
    - **Descripción**: Crear dashboard en Grafana o Kibana que visualice métricas clave: estado de reportes, tasa de error por WorkQueue, tiempo promedio de procesamiento, colas de RabbitMQ.
    - **Beneficio**: Mejorar observabilidad y detección temprana de problemas.
    - **Complejidad**: Media (2-3 semanas)
+   - **Capas afectadas**: Infrastructure (Monitoring), Application (Metrics)
 
-6. **Procesamiento Paralelo de Facturas en WorkQueues**
-   - **Descripción**: Modificar WorkQueues 1, 2 y 3 para procesar múltiples facturas en paralelo (actualmente procesan secuencialmente dentro del loop).
+6. **Procesamiento Paralelo de Facturas en WorkQueues (Application Layer)**
+   - **Descripción**: Modificar `WorkQueue1Processor`, `WorkQueue2Processor` y `WorkQueue3Processor` para procesar múltiples facturas en paralelo (actualmente procesan secuencialmente dentro del loop).
    - **Beneficio**: Reducir tiempo total de procesamiento end-to-end de 3 horas a < 1.5 horas.
    - **Complejidad**: Media-Alta (3-4 semanas)
+   - **Capas afectadas**: Application (Processors), Domain (Service con transacciones)
+
+7. **Aumentar Cobertura de Tests a 90%+ (Test Layer)**
+   - **Descripción**: Agregar tests unitarios faltantes especialmente en casos edge de manejo de errores y escenarios de concurrencia.
+   - **Beneficio**: Mayor confianza en refactors, reducción de bugs en producción.
+   - **Complejidad**: Baja-Media (1-2 semanas)
+   - **Capas afectadas**: Tests para todas las capas (Application, Domain, Infrastructure)
 
 ### Roadmap de Evolución
 
@@ -831,36 +1104,125 @@ tail -f /var/log/vidagruporeportes-mi/vidagruporeportes-mi.log \
 timeline
     title Roadmap de Optimización del Flujo de Generación de Reportes
 
-    Q1 2026 : Fase 1 - Estabilidad
-            : Implementar Idempotencia en WQ2 (CRÍTICA)
-            : Agregar Retry con Backoff Exponencial
-            : Mejorar logging y observabilidad
+    Q1 2026 : Fase 1 - Estabilidad y Testing
+            : Implementar Idempotencia en WQ2 (CRÍTICA - Domain)
+            : Agregar Retry con Backoff Exponencial (Infrastructure)
+            : Aumentar cobertura de tests a 90%+ (All Layers)
 
-    Q2 2026 : Fase 2 - Performance
-            : Optimizar consulta INSERT SELECT
-            : Implementar Circuit Breaker para Azure
-            : Procesamiento paralelo de facturas
+    Q2 2026 : Fase 2 - Performance y Resiliencia
+            : Optimizar consulta INSERT SELECT (Infrastructure)
+            : Implementar Circuit Breaker para Azure (Domain)
+            : Procesamiento paralelo de facturas (Application)
 
-    Q3 2026 : Fase 3 - Observabilidad
+    Q3 2026 : Fase 3 - Observabilidad y Mantenibilidad
             : Dashboard de monitoreo en tiempo real
             : Alertas proactivas basadas en métricas
             : Documentación de runbooks operativos
+            : Refactor de código legacy manteniendo arquitectura hexagonal
 ```
 
 ---
 
 ## 📚 **Referencias**
 
+### Documentación Arquitectónica
+
 - **GPS Arquitectónico**: [GPS de Arquitectura](./index.md)
-- **Documentación de Componentes**:
-  - [MicroIntegradorReportesVidaGrupo](./architecture-microintegrador-reportes-vidagrupo.md)
-- **Configuración**: `MicroIntegradorReportesVidaGrupo/src/main/resources/properties/microintegrator.properties`
-- **Scripts SQL**: `MicroIntegradorReportesVidaGrupo/src/main/resources/sql/`
+- **Documentación del Componente**: [MicroIntegradorReportesVidaGrupo](./architecture-microintegrador-reportes-vidagrupo.md)
+  - Incluye detalles de arquitectura hexagonal modular
+  - Patrones de diseño aplicados (CQRS, Repository, Scheduled Job, etc.)
+  - Estructura de capas (Application/Domain/Infrastructure)
+  - Estrategia de testing con 85%+ cobertura
+
+### Código Fuente
+
+**Módulo: detailcharge** (organizado por capas hexagonales)
+
+- **Application Layer**: `application/detailcharge/`
+  - Commands: `GenerateDetailChargeProcessor.java`
+  - Queries: `GetDetailChargeProcessor.java`
+  - WorkQueues: `WorkQueue1Processor.java` - `WorkQueue4Processor.java`
+
+- **Domain Layer**: `domain/detailcharge/`
+  - Services: `DetailChargeService.java`
+  - Ports: `ports/command/`, `ports/query/`
+  - Providers: `provider/ContentProvider.java`
+  - Models & DTOs: `model/`, `dto/`
+
+- **Infrastructure Layer**: `infrastructure/detailcharge/`
+  - Repositories: `adapter/repository/command/`, `adapter/repository/query/`
+  - Routes: `route/RestApiRoute.java`, `route/workqueue/`
+  - Mappers: `adapter/mapper/`
+  - Data Entities: `adapter/data/`
+
+### Configuración
+
+- **Properties**: `src/main/resources/properties/microintegrator.properties`
+- **Scripts SQL**: `src/main/resources/sql/`
+  - `CREATE.sql` - DDL de tablas
+  - `script_billing.sql` - Consultas BillingCenter
+  - `script_policy.sql` - Consultas PolicyCenter
+
+### Recursos Externos
+
 - **Azure Massive Download API**: Documentación interna de Azure Seguros Sura
 - **RabbitMQ Configuración**: Wiki interna de Infraestructura Mensajería
+- **Testing Strategy**: Ver tests en `test/` con estructura espejo de `main/`
+
+---
+
+## 🧪 **Estrategia de Testing**
+
+### Cobertura Actual
+
+- **Cobertura de tests**: 85%+ (124+ pruebas unitarias)
+- **Distribución de tests por capa**:
+  - Application Layer: Tests de Processors (Commands, Queries, WorkQueues)
+  - Domain Layer: Tests de Services, Providers, Validators
+  - Infrastructure Layer: Tests de Repositories, Mappers, Routes
+
+### Tipos de Tests
+
+1. **Tests Unitarios** (JUnit 4 + Mockito)
+   - Services de dominio con mocks de Ports
+   - Processors de aplicación con mocks de Services
+   - Repositories con mocks de JDBC
+
+2. **Tests de Integración** (si existen)
+   - Rutas de Camel end-to-end
+   - Integración con BD Oracle (test containers)
+
+3. **Mutation Testing** (PIT)
+   - Validación de calidad de tests
+   - Identificación de código no cubierto adecuadamente
+
+### Comandos de Testing
+
+```bash
+# Tests unitarios
+./gradlew test
+
+# Reporte de cobertura (Jacoco)
+./gradlew jacocoTestReport
+# Ver: build/reports/jacocoHtml/index.html
+
+# Mutation testing (PIT)
+./gradlew pitest
+# Ver: target/pit-reports/pitest/index.html
+```
 
 ---
 
 _Documentación generada con Método Ceiba - Arquitecto_  
-_Última actualización: 30 de Octubre, 2025_  
-_Versión: 1.0_
+_Última actualización: 10 de Noviembre, 2025_  
+_Versión: 2.0 - Actualizado con arquitectura hexagonal modular_
+
+**Cambios en v2.0:**
+- ✅ Actualizado con estructura hexagonal estricta por capas
+- ✅ Documentado diseño modular por tipo de reporte (`detailcharge`)
+- ✅ Agregados patrones de diseño aplicados (CQRS, Hexagonal, Scheduled Job, etc.)
+- ✅ Incluida separación clara de responsabilidades (Application/Domain/Infrastructure)
+- ✅ Documentada estrategia de testing con 85%+ cobertura
+- ✅ Diagramas de secuencia actualizados mostrando capas y ports
+- ✅ Referencias a ubicaciones exactas en código fuente
+- ✅ Corregida terminología: "patrón de work queues programadas" → "Scheduled Job Pattern (Quartz Scheduler)" para reflejar con precisión el patrón de diseño real utilizado
