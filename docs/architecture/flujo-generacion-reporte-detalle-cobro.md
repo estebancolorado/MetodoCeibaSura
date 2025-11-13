@@ -1,12 +1,21 @@
-# MicroIntegradorReportesVidaGrupo - Flujo: Generación de Reporte Detalle de Cobro 🔄
+# Ecosistema Seguros Sura - Flujo: Generación de Reporte Detalle de Cobro 🔄
 
 ## 📋 **Introducción**
 
 ### Descripción del Flujo
 
-El flujo de **Generación de Reporte de Detalle de Cobro** es un proceso crítico que genera reportes detallados con información granular de cada asegurado dentro de una factura colectiva de pólizas de Vida Grupo. Este flujo orquesta la construcción asíncrona de archivos masivos que pueden contener desde miles hasta millones de registros, utilizando el **Scheduled Job Pattern con Quartz Scheduler** para procesar grandes volúmenes de datos de forma eficiente sin impactar el rendimiento del sistema.
+El flujo de **Generación de Reporte de Detalle de Cobro** es un proceso crítico end-to-end que genera reportes detallados con información granular de cada asegurado dentro de una factura colectiva de pólizas de Vida Grupo. Este flujo abarca desde la **interacción del usuario en BillingCenter** hasta la **construcción asíncrona de archivos masivos** orquestada por el MicroIntegradorReportesVidaGrupo.
 
-El proceso inicia cuando una aplicación externa (PorChat, AVA, o BillingCenter) solicita la generación del reporte mediante una llamada REST. El sistema registra la solicitud y delega el procesamiento real a **4 jobs programados (WorkQueues)** que ejecutan de forma calendarizada y distribuida mediante Quartz:
+**Vista End-to-End del Flujo:**
+
+1. **BillingCenter (Initiation Layer)**: Usuario consulta/genera reporte mediante botón en UI → Llamada REST síncrona al MicroIntegrador
+2. **MicroIntegradorReportesVidaGrupo (Orchestration Layer)**: Registra solicitud y delega procesamiento asíncrono a **4 jobs programados (WorkQueues)** mediante Quartz Scheduler
+3. **WorkQueues (Processing Layer)**: Construcción incremental del archivo (consulta datos, envío bloques, cierre) sin bloquear BillingCenter
+4. **BillingCenter (Consumption Layer)**: Descarga archivo finalizado cuando usuario vuelve a consultar
+
+Este documento cubre **ambas perspectivas**: la interacción síncrona desde BillingCenter y el procesamiento asíncrono en el MicroIntegrador.
+
+**Jobs Programados del MicroIntegrador:**
 
 1. **WorkQueue 1**: Consulta de datos de Guidewire y creación de cabecera en Azure (ejecutado cada hora)
 2. **WorkQueue 2**: Construcción de registros del detalle y envío de bloques a Azure (ejecutado cada hora)
@@ -15,26 +24,490 @@ El proceso inicia cuando una aplicación externa (PorChat, AVA, o BillingCenter)
 
 ### Scope del Documento
 
-**Enfoque Principal**: Documentación técnica del flujo de trabajo end-to-end con énfasis en arquitectura hexagonal  
+**Enfoque Principal**: Documentación técnica del flujo end-to-end desde BillingCenter hasta generación asíncrona en MicroIntegrador  
 **Audiencia**: Desarrolladores, Arquitectos, Analistas de Negocio, Operaciones  
-**Última Actualización**: 10 de Noviembre, 2025  
-**Versión**: 2.0 (Actualizado con estructura hexagonal modular)
+**Última Actualización**: 13 de Noviembre, 2025  
+**Versión**: 3.0 (Actualizado con integración completa BillingCenter ↔ MicroIntegrador)
 
 ### Componentes Involucrados
 
 | Componente                                  | Tecnología              | Puerto/Contexto                                 | Responsabilidad                                           |
 | ------------------------------------------- | ----------------------- | ----------------------------------------------- | --------------------------------------------------------- |
+| **BillingCenter (Guidewire)**               | Guidewire 8.0.7 + Gosu  | Puerto N/A (web app)                            | Interfaz de usuario, iniciación del flujo vía REST        |
 | **MicroIntegradorReportesVidaGrupo**        | Apache Camel 3.20.0 + Java 17 | Puerto 9000                           | Microservicio de reportes con arquitectura hexagonal modular |
 | **Módulo: detailcharge**                    | Hexagonal Architecture  | Módulo dentro del microservicio                 | Lógica específica del reporte de detalle de cobro         |
-| **BillingCenter (Guidewire)**               | Guidewire 8.0.7         | N/A (solo consulta de DB)                       | Fuente de datos de facturación y coberturas               |
-| **PolicyCenter (Guidewire)**                | Guidewire 8.0.7         | N/A (solo consulta de DB)                       | Fuente de datos de pólizas y asegurados                   |
+| **BillingCenter DB (Guidewire)**            | Oracle Database         | Esquema BC                                      | Fuente de datos de facturación y coberturas               |
+| **PolicyCenter DB (Guidewire)**             | Oracle Database         | Esquema PC                                      | Fuente de datos de pólizas y asegurados                   |
 | **Azure Massive Download API**              | Microsoft Azure         | https://labapicorevidagrupo.suramericana.com... | Construcción y almacenamiento de archivos masivos         |
 | **RabbitMQ**                                | RabbitMQ                | msglab.suramericana.com.co:5672                 | Notificación asíncrona de cambio de estado a consumidores |
-| **Oracle DB (Control)**                     | Oracle Database         | JDBC 19.8.0.0                                   | Tablas de control y estado del proceso                    |
-| **Oracle DB (Guidewire Replica)**           | Oracle Database         | JDBC 19.8.0.0                                   | Réplica read-only de esquemas BC y PC                     |
-| **Aplicaciones Consumidoras (PorChat/AVA)** | Diversos                | N/A                                             | Solicitan y consumen reportes generados                   |
+| **Oracle DB (Control MicroIntegrador)**     | Oracle Database         | JDBC 19.8.0.0                                   | Tablas de control y estado del proceso                    |
+| **Oracle DB (Guidewire Replica)**           | Oracle Database         | JDBC 19.8.0.0                                   | Réplica read-only de esquemas BC y PC para consultas masivas |
 
-### Arquitectura del Componente
+---
+
+## 🎯 **Vista desde BillingCenter: Iniciación y Consumo del Flujo**
+
+### Contexto de Usuario
+
+El flujo de generación de reporte de detalle de cobro se inicia desde la **interfaz de usuario de BillingCenter** cuando un usuario de negocio (típicamente del área de Facturación o Servicio al Cliente) necesita obtener el desglose granular de una factura colectiva o devolución de pólizas de Vida Grupo.
+
+**Actor Principal**: Usuario de Facturación/Servicio al Cliente en BillingCenter
+**Puntos de Entrada**: 
+- Pantalla "Facturas Colectivas" (tabla de facturas de pólizas colectivas de Vida Grupo)
+- Pantalla "Devoluciones de Pólizas Colectivas" (tabla de devoluciones/desembolsos colectivos)
+
+**Opciones Disponibles en la Tabla**:
+- **Botón "Generar reporte"**: Genera reporte básico directamente en BillingCenter (sin integración)
+- **Botón "Generar detalle de cobro"**: Inicia flujo de integración con MicroIntegradorReportesVidaGrupo
+
+**Acción del Usuario**: Click en botón "Generar detalle de cobro" en la fila de la factura/devolución
+
+### Arquitectura de la Integración BillingCenter ↔ MicroIntegrador
+
+```mermaid
+graph LR
+    subgraph "BillingCenter"
+        TABLA[Tabla Facturas/Devoluciones<br/>PCF]
+        BTN1[Botón: Generar reporte]
+        BTN2[Botón: Generar detalle cobro]
+        HANDLER[DetailChargeReportHandler<br/>Gosu Code]
+        SCREEN[DetailChargeDownloadScreen<br/>PCF]
+    end
+    
+    subgraph "Network"
+        HTTP[HTTP/REST<br/>Síncrono]
+    end
+    
+    subgraph "MicroIntegradorReportesVidaGrupo"
+        REST_API[REST API<br/>RestApiRoute]
+        CMD[Command/Query<br/>Application Layer]
+        SVC[DetailChargeService<br/>Domain Layer]
+        WQ[WorkQueues<br/>Async Processing]
+    end
+    
+    subgraph "Azure & Storage"
+        AZURE[Azure Massive<br/>Download API]
+        FILE[Archivo CSV/TXT<br/>Almacenamiento]
+    end
+    
+    TABLA -->|Click| BTN2
+    BTN2 -->|1. Invoke| HANDLER
+    HANDLER -->|2. GET consulta| HTTP
+    HTTP --> REST_API
+    REST_API --> CMD
+    CMD --> SVC
+    
+    HANDLER -.->|3. Si 404: POST genera| HTTP
+    
+    SVC -->|Async| WQ
+    WQ --> AZURE
+    AZURE --> FILE
+    
+    HANDLER -->|4. Si 200 OK| SCREEN
+    SCREEN -->|5. Descargar| FILE
+    FILE -.->|Download| HTTP
+    HTTP -.->|Response| HANDLER
+    
+    classDef bc fill:#e3f2fd,stroke:#1976d2,color:#000
+    classDef mi fill:#f3e5f5,stroke:#7b1fa2,color:#000
+    classDef external fill:#fff3e0,stroke:#f57c00,color:#000
+    
+    class TABLA,BTN1,BTN2,HANDLER,SCREEN bc
+    class REST_API,CMD,SVC,WQ mi
+    class HTTP,AZURE,FILE external
+```
+
+### Flujo de Interacción: BillingCenter → MicroIntegrador
+
+```mermaid
+sequenceDiagram
+    participant USER as Usuario<br/>(Facturación)
+    participant UI as BillingCenter UI<br/>(Invoice Screen)
+    participant GOSU as Gosu Handler<br/>(Backend BC)
+    participant WS as Web Service Client<br/>(REST Client)
+    participant MI as MicroIntegrador<br/>(REST API)
+    participant DB_MI as DB Control<br/>(MicroIntegrador)
+    participant WQ as WorkQueues<br/>(Async Jobs)
+    participant AZURE as Azure API
+
+    Note over USER,AZURE: ESCENARIO 1: CONSULTA AUTOMÁTICA AL HACER CLICK
+
+    USER->>UI: 1. Navega a "Facturas Colectivas"<br/>o "Devoluciones de Pólizas Colectivas"
+    UI->>UI: 2. Renderiza tabla con botones<br/>"Generar reporte" | "Generar detalle de cobro"
+    USER->>UI: 3. Click en "Generar detalle de cobro"<br/>para Invoice #BC-001234567
+    UI->>GOSU: 4. onClick() → consultarYGenerarDetalle()
+    
+    GOSU->>WS: 5. GET /v1/he/invoices/{invoiceNumber}/chargedetail/report
+    Note over WS,MI: Llamada REST SÍNCRONA<br/>Timeout: 30 segundos
+    
+    WS->>MI: 6. HTTP GET Request<br/>Header: Authorization Bearer {token}
+    MI->>MI: 7. Validar autenticación
+    MI->>DB_MI: 8. SELECT estado, url FROM principal<br/>WHERE invoiceNumber='BC-001234567'
+    
+    alt Reporte NO existe en BD
+        DB_MI-->>MI: Empty result
+        MI-->>WS: 404 Not Found<br/>{ "error": "Reporte no encontrado" }
+        WS-->>GOSU: Excepción: ReporteNoEncontrado
+        
+        Note over GOSU: GENERACIÓN AUTOMÁTICA (sin confirmación)
+        GOSU->>GOSU: Detectar 404 → Invocar generación automáticamente
+        
+    else Reporte existe pero EN PROCESO (estado=1,2,3,4)
+        DB_MI-->>MI: estado=3 (Datos cargados, enviando bloques)
+        MI-->>WS: 404 Not Found<br/>{ "message": "Reporte en proceso",<br/>"status": "processing" }
+        WS-->>GOSU: Excepción: ReporteEnProceso
+        GOSU->>UI: Mostrar mensaje:<br/>"El reporte está siendo generado.<br/>Por favor intente en unos minutos."
+        UI-->>USER: Notificación con spinner
+        
+    else Reporte COMPLETADO (estado=5)
+        DB_MI-->>MI: estado=5, url={azure_url}
+        MI-->>WS: 200 OK<br/>{ "status": "completed", "downloadUrl": "{url}" }
+        WS-->>GOSU: Respuesta con URL
+        
+        Note over GOSU,UI: REDIRECCIÓN A PANTALLA DE DESCARGA
+        GOSU->>UI: Redirigir a pantalla "Detalle de Cobro Disponible"
+        UI->>UI: Renderizar pantalla con:<br/>- Info de la factura<br/>- Botón "Descargar Archivo"
+        UI-->>USER: Pantalla de descarga lista
+        
+        USER->>UI: Click en "Descargar Archivo"
+        UI->>GOSU: Invocar descarga
+        GOSU->>AZURE: GET {azure_url} directamente
+        AZURE-->>GOSU: Archivo CSV completo
+        GOSU->>UI: Trigger descarga en navegador
+        UI-->>USER: Descarga automática:<br/>"detalle_cobro_BC-001234567.csv"
+            
+        else Archivo expirado o no disponible
+            AZURE-->>MI: 404 Not Found / 410 Gone
+            MI->>DB_MI: UPDATE estado=EXPIRED
+            MI-->>WS: 404 Not Found<br/>{ "error": "Archivo expirado.<br/>Solicite nueva generación" }
+            WS-->>GOSU: Excepción: ArchivoExpirado
+            GOSU->>UI: Mostrar mensaje de error
+            UI-->>USER: "El archivo ha expirado.<br/>Genere nuevamente el reporte."
+        end
+        
+    else Reporte con ERROR
+        DB_MI-->>MI: estado=ERROR
+        MI-->>WS: 500 Internal Server Error<br/>{ "error": "Error en generación" }
+        WS-->>GOSU: Excepción: ErrorGeneracion
+        GOSU->>UI: Mostrar mensaje de error
+        UI-->>USER: "Ocurrió un error.<br/>Contacte soporte técnico."
+    end
+
+    Note over USER,AZURE: ESCENARIO 2: GENERACIÓN AUTOMÁTICA (POST después de 404)
+
+    Note over GOSU: Continuación del flujo cuando GET retorna 404
+    GOSU->>WS: POST /v1/he/invoices/{invoiceNumber}/chargedetail/report
+    Note over WS,MI: Llamada REST SÍNCRONA<br/>Timeout: 30 segundos
+    
+    WS->>MI: HTTP POST Request<br/>Header: Authorization Bearer {token}<br/>Body: { "invoiceNumber": "BC-001234567" }
+    MI->>MI: Validar autenticación
+    MI->>DB_MI: SELECT * FROM principal<br/>WHERE invoiceNumber='BC-001234567'
+    
+    alt Reporte YA EXISTE (duplicado - race condition)
+        DB_MI-->>MI: Registro existente (creado entre GET y POST)
+        MI-->>WS: 409 Conflict<br/>{ "message": "Reporte ya existe",<br/>"status": "{estado_actual}" }
+        WS-->>GOSU: Excepción: ReporteDuplicado
+        GOSU->>UI: Mostrar en toolbar:<br/>"El reporte ya está siendo procesado.<br/>Por favor intente más tarde."
+        UI-->>USER: Mensaje en toolbar (sin redirección)
+        
+    else Reporte NO EXISTE (creación exitosa)
+        MI->>DB_MI: INSERT INTO principal<br/>(invoiceNumber, estado=1, lock=0, fecha_creacion=NOW())
+        DB_MI-->>MI: OK - Registro creado
+        MI-->>WS: 200 OK<br/>{ "message": "Solicitud registrada",<br/>"status": "pending" }
+        WS-->>GOSU: Respuesta exitosa
+        GOSU->>UI: Mostrar en toolbar (verde):<br/>"El archivo está en proceso de generación.<br/>Por favor intente más tarde."
+        UI-->>USER: Mensaje en toolbar<br/>(permanece en tabla, sin redirección)
+        
+        Note over WQ,AZURE: Procesamiento asíncrono en background<br/>(WorkQueues 1→2→3 via Quartz)
+        
+        WQ->>DB_MI: WorkQueue 1 detecta solicitud (cada hora)
+        WQ->>AZURE: Procesa datos y construye archivo
+        WQ->>DB_MI: Actualiza estado=5, guarda URL
+    end
+
+    Note over USER,UI: Usuario puede cerrar pantalla<br/>y volver más tarde a consultar
+```
+
+### Casos de Uso de BillingCenter
+
+#### CU-BC-01: Consulta y Descarga de Reporte Existente (Happy Path)
+
+**Precondiciones**:
+- Usuario autenticado en BillingCenter
+- Usuario tiene permisos para gestionar facturas colectivas
+- Factura o devolución colectiva existe en sistema (ej: BC-001234567)
+- Reporte ya fue generado previamente (estado=5)
+
+**Flujo Principal**:
+1. Usuario navega a pantalla "Facturas Colectivas" o "Devoluciones de Pólizas Colectivas"
+2. Sistema renderiza tabla con facturas/devoluciones
+3. Usuario localiza factura BC-001234567 en la tabla
+4. Usuario hace click en botón "Generar detalle de cobro" (columna derecha)
+5. Sistema (Gosu handler) invoca REST GET al MicroIntegrador
+6. MicroIntegrador responde 200 OK con status="completed" y URL de descarga
+7. **Sistema redirige a pantalla "Detalle de Cobro Disponible"**:
+   - Muestra información de la factura
+   - Muestra botón "Descargar Archivo"
+8. Usuario hace click en "Descargar Archivo"
+9. Sistema descarga archivo desde Azure (usando URL provista)
+10. Usuario recibe archivo CSV "detalle_cobro_BC-001234567.csv"
+
+**Postcondiciones**:
+- Usuario descarga archivo CSV con detalle de cobro
+- Usuario permanece en pantalla de descarga (puede descargar múltiples veces)
+
+#### CU-BC-02: Generación Automática de Nuevo Reporte (Primera Vez)
+
+**Precondiciones**:
+- Usuario autenticado en BillingCenter
+- Factura o devolución existe y tiene coberturas activas
+- No existe solicitud previa para esta factura (GET retornará 404)
+
+**Flujo Principal**:
+1. Usuario navega a pantalla "Facturas Colectivas" o "Devoluciones de Pólizas Colectivas"
+2. Usuario hace click en botón "Generar detalle de cobro" para factura BC-001234567
+3. Sistema (Gosu handler) invoca REST GET al MicroIntegrador (consulta automática)
+4. MicroIntegrador responde 404 Not Found (reporte no existe)
+5. **Sistema detecta 404 y automáticamente invoca REST POST** (sin confirmación del usuario)
+6. MicroIntegrador registra solicitud en BD (estado=1)
+7. MicroIntegrador responde 200 OK "Solicitud registrada"
+8. Sistema muestra mensaje en **toolbar verde**: "El archivo está en proceso de generación. Por favor intente más tarde."
+9. Usuario permanece en la tabla (sin redirección)
+10. En background, WorkQueues del MicroIntegrador procesan la solicitud
+11. Cuando usuario vuelva a hacer click en el botón (CU-BC-01), podrá descargar el archivo
+
+**Postcondiciones**:
+- Solicitud registrada en MicroIntegrador (estado=1)
+- WorkQueues procesarán asíncronamente (1-3 horas)
+- Usuario informado mediante mensaje en toolbar
+- Usuario puede continuar trabajando en BillingCenter
+
+### Manejo de Errores desde BillingCenter
+
+| Código HTTP | Escenario                           | Mensaje al Usuario                                                  | Acción Sugerida                      |
+| ----------- | ----------------------------------- | ------------------------------------------------------------------- | ------------------------------------ |
+| **200 OK**  | Consulta exitosa (completado)       | Redirige a pantalla de descarga con botón "Descargar Archivo"       | N/A (flujo exitoso)                  |
+| **404**     | Reporte no existe (GET)             | Genera automáticamente (POST) sin confirmación del usuario          | Mostrar toolbar: "En proceso..."     |
+| **404**     | Reporte en proceso (GET)            | "El reporte está siendo generado. Por favor intente más tarde."    | Mostrar toolbar amarillo             |
+| **404**     | Archivo expirado                    | "El archivo ha expirado (>7 días). Genere nuevamente el reporte."   | Generar automáticamente              |
+| **409**     | Reporte duplicado (POST)            | "El reporte ya está siendo procesado. Por favor intente más tarde." | Mostrar toolbar (permanecer en tabla)|
+| **500**     | Error en generación                 | "Ocurrió un error en el sistema. Contacte soporte técnico."         | Mostrar toolbar rojo + log error     |
+| **401/403** | Error de autenticación              | "Sesión expirada. Inicie sesión nuevamente."                        | Redirect a login                     |
+| **Timeout** | Timeout de red (>30s)               | "El servicio no responde. Intente nuevamente en unos minutos."      | Mostrar toolbar rojo                 |
+
+### Configuración de Integración en BillingCenter
+
+**Archivo de Configuración**: `BillingCenter/modules/configuration/config/integration-config.xml`
+
+```xml
+<!-- Configuración de integración con MicroIntegradorReportesVidaGrupo -->
+<integration id="microintegrador-reportes">
+  <endpoint>
+    <name>DetailChargeReportService</name>
+    <url>http://localhost:9000/v1/he/invoices/{invoiceNumber}/chargedetail/report</url>
+    <timeout>30000</timeout> <!-- 30 segundos -->
+    <retries>2</retries>
+  </endpoint>
+  
+  <authentication>
+    <type>Bearer</type>
+    <tokenProvider>SuraOAuthProvider</tokenProvider>
+  </authentication>
+  
+  <error-handling>
+    <on-404>SHOW_GENERATE_OPTION</on-404>
+    <on-409>REDIRECT_TO_QUERY</on-409>
+    <on-timeout>RETRY_WITH_BACKOFF</on-timeout>
+  </error-handling>
+</integration>
+```
+
+**Código Gosu (Ejemplo Simplificado)**:
+
+```gosu
+// Archivo: BillingCenter/modules/configuration/gsrc/sura/bc/invoice/DetailChargeReportHandler.gs
+
+package sura.bc.invoice
+
+uses gw.api.web.WebserviceClient
+uses sura.util.RestClient
+
+class DetailChargeReportHandler {
+  
+  /**
+   * Handler principal del botón "Generar detalle de cobro"
+   * Primero consulta (GET), si no existe genera automáticamente (POST)
+   * @param invoice La factura para la cual se consulta/genera el detalle
+   */
+  function handleGenerarDetalleCobro(invoice : Invoice) {
+    var invoiceNumber = invoice.InvoiceNumber
+    var endpoint = "http://localhost:9000/v1/he/invoices/${invoiceNumber}/chargedetail/report"
+    
+    try {
+      // PASO 1: Intentar consultar reporte existente (GET)
+      var response = RestClient.get(endpoint)
+      
+      if (response.StatusCode == 200) {
+        // Reporte completado: Redirigir a pantalla de descarga
+        var downloadUrl = response.JsonBody["downloadUrl"] as String
+        redirectToDownloadScreen(invoice, downloadUrl)
+        
+      } else if (response.StatusCode == 404) {
+        var message = response.JsonBody["message"] as String
+        
+        if (message.contains("en proceso")) {
+          // Reporte en proceso: Mostrar mensaje en toolbar
+          showToolbarMessage("El reporte está siendo generado. Por favor intente más tarde.", "warning")
+        } else {
+          // Reporte no existe: GENERAR AUTOMÁTICAMENTE (sin confirmación)
+          generarReporteAutomaticamente(invoice)
+        }
+      } else if (response.StatusCode == 500) {
+        showToolbarMessage("Ocurrió un error en el sistema. Contacte soporte técnico.", "error")
+      }
+      
+    } catch (e : TimeoutException) {
+      showToolbarMessage("El servicio no responde. Intente nuevamente en unos minutos.", "error")
+    }
+  }
+  
+  /**
+   * Genera el reporte automáticamente cuando no existe (POST)
+   * @param invoice La factura para generar el detalle
+   */
+  private function generarReporteAutomaticamente(invoice : Invoice) {
+    var invoiceNumber = invoice.InvoiceNumber
+    var endpoint = "http://localhost:9000/v1/he/invoices/${invoiceNumber}/chargedetail/report"
+    
+    try {
+      var response = RestClient.post(endpoint, {"invoiceNumber": invoiceNumber})
+      
+      if (response.StatusCode == 200) {
+        // Solicitud registrada exitosamente
+        showToolbarMessage("El archivo está en proceso de generación. Por favor intente más tarde.", "success")
+      } else if (response.StatusCode == 409) {
+        // Race condition: Otro usuario ya generó entre GET y POST
+        showToolbarMessage("El reporte ya está siendo procesado. Por favor intente más tarde.", "warning")
+      } else {
+        showToolbarMessage("Error al solicitar generación del reporte.", "error")
+      }
+    } catch (e : TimeoutException) {
+      showToolbarMessage("El servicio no responde. Intente nuevamente.", "error")
+    }
+  }
+  
+  /**
+   * Redirige a pantalla de descarga con botón
+   * @param invoice La factura
+   * @param downloadUrl URL de Azure para descarga
+   */
+  private function redirectToDownloadScreen(invoice : Invoice, downloadUrl : String) {
+    // Navegar a pantalla "DetailChargeDownloadScreen.pcf"
+    // Pasar invoice y downloadUrl como parámetros
+    pcf.DetailChargeDownloadScreen.go(invoice, downloadUrl)
+  }
+  
+  /**
+   * Muestra mensaje en toolbar de BillingCenter
+   * @param message Mensaje a mostrar
+   * @param type Tipo: "success", "warning", "error"
+   */
+  private function showToolbarMessage(message : String, type : String) {
+    // Implementación de toolbar message según tipo
+    if (type == "success") {
+      gw.api.util.LocationUtil.addRequestScopedInfoMessage(message)
+    } else if (type == "warning") {
+      gw.api.util.LocationUtil.addRequestScopedWarningMessage(message)
+    } else {
+      gw.api.util.LocationUtil.addRequestScopedErrorMessage(message)
+    }
+  }
+}
+```
+
+**Configuración de PCF (Pantalla de Descarga)**:
+
+```xml
+<!-- Archivo: BillingCenter/modules/configuration/config/web/pcf/DetailChargeDownloadScreen.pcf -->
+<PCF
+  xmlns="urn:guidewire:pcf"
+  title="Detalle de Cobro Disponible">
+  
+  <InputSet>
+    <Input id="invoiceNumber" label="Número de Factura" value="invoice.InvoiceNumber" readOnly="true"/>
+    <Input id="policyNumber" label="Póliza" value="invoice.Policy.PolicyNumber" readOnly="true"/>
+    <Input id="reportDate" label="Fecha de Generación" value="Date.Today" readOnly="true"/>
+  </InputSet>
+  
+  <ButtonSet>
+    <PCFButton
+      id="downloadButton"
+      label="Descargar Archivo"
+      action="downloadFile(downloadUrl)"
+      icon="download"/>
+    
+    <PCFButton
+      id="backButton"
+      label="Volver"
+      action="pcf.InvoicesListScreen.go()"/>
+  </ButtonSet>
+  
+  <Code>
+    function downloadFile(url : String) {
+      // Descargar archivo directamente desde Azure usando URL
+      var fileStream = RestClient.getStream(url)
+      gw.api.web.WebUtil.downloadFile(fileStream, "detalle_cobro_${invoice.InvoiceNumber}.csv")
+    }
+  </Code>
+</PCF>
+```
+
+### Puntos Críticos de Error en BillingCenter
+
+#### Error: "Timeout al consultar MicroIntegrador (>30 segundos)"
+
+**Causa**: El MicroIntegrador está descargando un archivo muy grande desde Azure y no responde dentro del timeout configurado.
+
+**Diagnóstico**:
+```gosu
+// Revisar logs de BillingCenter
+// Archivo: BillingCenter/logs/billing.log
+// Buscar: "Timeout" + "MicroIntegrador" + invoiceNumber
+```
+
+**Solución**:
+1. **Solución Inmediata**: Aumentar timeout en `integration-config.xml` de 30s a 60s
+2. **Solución a Mediano Plazo**: Implementar patrón asíncrono:
+   - POST para solicitar generación
+   - GET con polling cada 30 segundos hasta que estado=5
+   - Mostrar progress bar al usuario
+
+#### Error: "Credenciales de autenticación inválidas (401 Unauthorized)"
+
+**Causa**: El token OAuth usado por BillingCenter para autenticarse con MicroIntegrador ha expirado o es inválido.
+
+**Diagnóstico**:
+```bash
+# Verificar token actual
+curl -H "Authorization: Bearer {token}" \
+  http://localhost:9000/v1/health
+
+# Verificar configuración en BillingCenter
+grep "oauth" BillingCenter/modules/configuration/config/integration-config.xml
+```
+
+**Solución**:
+1. Renovar token en `SuraOAuthProvider`
+2. Verificar que el servicio de OAuth está activo
+3. Implementar refresh automático de token en el cliente
+
+---
+
+## 🔄 **Vista desde MicroIntegrador: Procesamiento Asíncrono**
+
+> **Nota**: Las secciones siguientes documentan el procesamiento asíncrono que ocurre en el MicroIntegradorReportesVidaGrupo después de que BillingCenter registra la solicitud.
+
+### Arquitectura del MicroIntegrador
 
 El MicroIntegradorReportesVidaGrupo implementa una **arquitectura hexagonal estricta** combinada con **diseño modular por tipo de reporte**. El reporte de detalle de cobro está implementado como un módulo independiente (`detailcharge`) organizado en 3 capas:
 
@@ -44,11 +517,82 @@ El MicroIntegradorReportesVidaGrupo implementa una **arquitectura hexagonal estr
 
 **Patrones aplicados**: Hexagonal Architecture, CQRS (Command/Query Separation), Repository Pattern, **Scheduled Job Pattern (Quartz)**, Event-Driven Architecture, Provider Pattern, Batch Processing Pattern
 
----
+### Diagramas de Secuencia del MicroIntegrador
 
-## 🔄 **Diagramas de Secuencia**
+### 0. Flujo End-to-End: BillingCenter → MicroIntegrador → Azure (Vista Completa)
 
-### 1. Flujo Principal: Generación de Reporte Detalle de Cobro (Vista General)
+```mermaid
+sequenceDiagram
+    participant USER as Usuario<br/>BillingCenter
+    participant BC as BillingCenter<br/>(Gosu Handler)
+    participant MI_API as MicroIntegrador<br/>REST API
+    participant MI_DB as DB Control<br/>MicroIntegrador
+    participant WQ1 as WorkQueue 1<br/>(Quartz Job)
+    participant WQ2 as WorkQueue 2<br/>(Quartz Job)
+    participant WQ3 as WorkQueue 3<br/>(Quartz Job)
+    participant GW as Oracle DB<br/>(Guidewire Replica)
+    participant AZURE as Azure Massive<br/>Download API
+    participant MQ as RabbitMQ
+
+    Note over USER,MQ: FASE 1: SOLICITUD DESDE BILLINGCENTER (SÍNCRONA)
+
+    USER->>BC: 1. Click "Generar Detalle de Cobro"<br/>Invoice #BC-001234567
+    BC->>MI_API: 2. POST /v1/he/invoices/BC-001234567/chargedetail/report<br/>Timeout: 30s
+    MI_API->>MI_DB: 3. INSERT registro (estado=1, lock=0)
+    MI_DB-->>MI_API: OK
+    MI_API-->>BC: 4. 200 OK - Solicitud registrada
+    BC-->>USER: 5. "Reporte solicitado. Disponible en 1-3 horas"
+
+    Note over USER,BC: Usuario cierra pantalla y continúa con otras tareas
+
+    Note over WQ1,AZURE: FASE 2: PROCESAMIENTO ASÍNCRONO (DESACOPLADO)
+
+    Note over WQ1: WorkQueue 1 - Ejecutado cada hora vía Quartz
+    WQ1->>MI_DB: 6. SELECT pendientes (estado=1, lock=0)
+    MI_DB-->>WQ1: Factura BC-001234567
+    WQ1->>MI_DB: 7. UPDATE lock=1, estado=2
+    WQ1->>GW: 8. INSERT SELECT masivo (BC + PC schemas)
+    GW-->>WQ1: Datos cargados
+    WQ1->>AZURE: 9. POST /create-header
+    AZURE-->>WQ1: headerID
+    WQ1->>MI_DB: 10. UPDATE estado=3, headerID, lock=0
+
+    Note over WQ2: WorkQueue 2 - Ejecutado cada hora vía Quartz
+    WQ2->>MI_DB: 11. SELECT listos (estado=3, lock=0)
+    WQ2->>MI_DB: 12. UPDATE lock=1
+    
+    loop Procesamiento por lotes (batchSize=2000)
+        WQ2->>MI_DB: 13. SELECT lote de registros
+        WQ2->>WQ2: Construir contenido CSV
+        WQ2->>AZURE: 14. POST /upload-content (bloque)
+        AZURE-->>WQ2: OK
+        WQ2->>MI_DB: 15. UPDATE enviado=1
+    end
+    
+    WQ2->>MI_DB: 16. UPDATE estado=4, lock=0 (todos enviados)
+
+    Note over WQ3: WorkQueue 3 - Ejecutado cada hora vía Quartz
+    WQ3->>MI_DB: 17. SELECT para cerrar (estado=4, lock=0)
+    WQ3->>AZURE: 18. POST /close-file
+    AZURE-->>WQ3: OK
+    WQ3->>AZURE: 19. GET /download-url
+    AZURE-->>WQ3: URL de descarga
+    WQ3->>MI_DB: 20. UPDATE estado=5, url, lock=0
+    WQ3->>MQ: 21. PUBLISH evento (archivo listo)
+
+    Note over USER,AZURE: FASE 3: CONSULTA Y DESCARGA DESDE BILLINGCENTER (SÍNCRONA)
+
+    USER->>BC: 22. Click "Consultar Detalle de Cobro"<br/>(después de 2-3 horas)
+    BC->>MI_API: 23. GET /v1/he/invoices/BC-001234567/chargedetail/report
+    MI_API->>MI_DB: 24. SELECT estado, url
+    MI_DB-->>MI_API: estado=5, url={azure_url}
+    MI_API->>AZURE: 25. GET {azure_url}
+    AZURE-->>MI_API: Archivo CSV completo
+    MI_API-->>BC: 26. 200 OK + archivo stream
+    BC-->>USER: 27. Descarga automática:<br/>"detalle_cobro_BC-001234567.csv"
+```
+
+### 1. Flujo Principal: Generación de Reporte Detalle de Cobro (Vista MicroIntegrador)
 
 ```mermaid
 sequenceDiagram
@@ -862,11 +1406,241 @@ Scenario: Intento de descarga de reporte con URL expirada en Azure
   And el usuario debe solicitar una nueva generación del reporte
 ```
 
+#### TC006: Flujo End-to-End desde BillingCenter (Integración Completa)
+
+```gherkin
+Scenario: Usuario de BillingCenter genera y descarga reporte exitosamente
+  Given el usuario está autenticado en BillingCenter
+  And navega a la pantalla "Facturas Colectivas"
+  And la factura "BC-001234567" aparece en la tabla
+  And la factura tiene 5,000 asegurados activos
+  And no existe reporte previo para esta factura
+  
+  When el usuario hace click en botón "Generar detalle de cobro"
+  Then BillingCenter invoca GET /v1/he/invoices/BC-001234567/chargedetail/report
+  And MicroIntegrador responde 404 Not Found (reporte no existe)
+  And BillingCenter automáticamente invoca POST (sin confirmación del usuario)
+  And MicroIntegrador responde 200 OK - Solicitud registrada
+  And BillingCenter muestra en toolbar verde: "El archivo está en proceso de generación. Por favor intente más tarde"
+  And el usuario permanece en la pantalla de tabla
+  
+  # Procesamiento asíncrono en background (WorkQueues 1→2→3)
+  # Tiempo estimado: 2-3 horas
+  
+  When el usuario vuelve a la pantalla después de 3 horas
+  And hace click nuevamente en "Generar detalle de cobro"
+  Then BillingCenter invoca GET /v1/he/invoices/BC-001234567/chargedetail/report
+  And MicroIntegrador responde 200 OK con status="completed" y downloadUrl
+  And BillingCenter redirige a pantalla "Detalle de Cobro Disponible"
+  And la pantalla muestra botón "Descargar Archivo"
+  
+  When el usuario hace click en "Descargar Archivo"
+  Then BillingCenter descarga archivo desde Azure usando URL provista
+  And el usuario recibe archivo "detalle_cobro_BC-001234567.csv"
+  And el archivo contiene 5,000 registros (uno por asegurado)
+```
+
+#### TC007: BillingCenter - Timeout en Llamada Síncrona
+
+```gherkin
+Scenario: Timeout de red al consultar reporte desde BillingCenter
+  Given el usuario está en pantalla "Invoice Detail" de factura "BC-001234571"
+  And existe un reporte completado (estado=5)
+  And el archivo en Azure pesa 50 MB (archivo muy grande)
+  When el usuario hace click en "Consultar Detalle de Cobro"
+  And BillingCenter invoca GET con timeout de 30 segundos
+  And MicroIntegrador intenta descargar archivo desde Azure
+  And la descarga toma más de 30 segundos debido al tamaño
+  Then BillingCenter captura TimeoutException
+  And muestra mensaje: "El servicio no responde. Intente nuevamente."
+  And ofrece botón "Reintentar"
+  
+  When el usuario hace click en "Reintentar"
+  And esta vez la red responde más rápido
+  Then la descarga se completa exitosamente
+  And el usuario recibe el archivo
+```
+
+#### TC008: BillingCenter - Usuario Consulta Reporte en Proceso
+
+```gherkin
+Scenario: Usuario intenta descargar reporte que aún está siendo generado
+  Given el usuario generó un reporte hace 30 minutos
+  And el reporte está en estado=3 (enviando bloques - WorkQueue 2)
+  And el usuario navega a "Facturas Colectivas"
+  
+  When el usuario hace click en "Generar detalle de cobro"
+  Then BillingCenter invoca GET /v1/he/invoices/BC-001234572/chargedetail/report
+  And MicroIntegrador responde 404 Not Found con mensaje "Reporte en proceso"
+  And BillingCenter muestra en toolbar amarillo: "El reporte está siendo generado. Por favor intente más tarde."
+  And el usuario permanece en la tabla (sin redirección)
+  And NO se ejecuta POST automáticamente (porque detecta "en proceso")
+  
+  When el usuario espera 45 minutos adicionales
+  And hace click nuevamente en "Generar detalle de cobro"
+  Then BillingCenter invoca GET nuevamente
+  And el reporte ya está completado (estado=5)
+  And BillingCenter redirige a pantalla de descarga
+  And la descarga se realiza exitosamente
+```
+
+#### TC009: BillingCenter - Credenciales OAuth Expiradas
+
+```gherkin
+Scenario: Token de autenticación expirado al llamar MicroIntegrador
+  Given el usuario está autenticado en BillingCenter
+  And el token OAuth de BillingCenter expiró hace 5 minutos
+  When el usuario hace click en "Generar Detalle de Cobro"
+  Then BillingCenter invoca POST con token expirado
+  And MicroIntegrador responde 401 Unauthorized
+  And BillingCenter detecta error de autenticación
+  And intenta renovar token automáticamente vía SuraOAuthProvider
+  
+  alt Renovación de token exitosa
+    And BillingCenter reintenta POST con nuevo token
+    And MicroIntegrador responde 200 OK
+    And el proceso continúa normalmente
+  else Renovación de token fallida
+    And BillingCenter muestra: "Sesión expirada. Inicie sesión nuevamente."
+    And redirige al usuario a pantalla de login
+  end
+```
+
+#### TC010: BillingCenter - Solicitud Duplicada por Race Condition
+
+```gherkin
+Scenario: Usuario intenta generar reporte que fue creado por otro usuario simultáneamente
+  Given dos usuarios están viendo la misma factura "BC-001234573"
+  And no existe reporte previo
+  
+  When el Usuario A hace click en "Generar detalle de cobro" (t=0s)
+  Then BillingCenter A invoca GET → 404 Not Found
+  And BillingCenter A invoca POST
+  And MicroIntegrador crea registro (estado=1)
+  
+  When el Usuario B hace click en "Generar detalle de cobro" (t=2s)
+  Then BillingCenter B invoca GET → 404 Not Found (registro aún no visible)
+  And BillingCenter B invoca POST
+  And MicroIntegrador responde 409 Conflict (registro ya existe)
+  And BillingCenter B muestra en toolbar amarillo: "El reporte ya está siendo procesado. Por favor intente más tarde."
+  And Usuario B permanece en tabla
+  
+  When el Usuario B espera 3 horas e intenta nuevamente
+  Then BillingCenter B invoca GET
+  And MicroIntegrador responde 200 OK (completado)
+  And Usuario B es redirigido a pantalla de descarga exitosamente
+```
+
 ---
 
 ## 🔍 **Troubleshooting**
 
 ### Problemas Comunes y Soluciones
+
+#### Error (BillingCenter): "Timeout al consultar MicroIntegrador - Servicio no responde"
+
+**Causa**: BillingCenter está intentando descargar un archivo muy grande desde el MicroIntegrador y el timeout de 30 segundos es insuficiente. O bien, el MicroIntegrador está consultando Azure y experimenta latencia.
+
+**Diagnóstico (desde BillingCenter)**:
+
+```bash
+# Revisar logs de BillingCenter
+grep -i "timeout.*MicroIntegrador" BillingCenter/logs/billing.log | tail -20
+
+# Verificar conectividad con MicroIntegrador
+curl -w "@curl-format.txt" \
+  -H "Authorization: Bearer {token}" \
+  http://localhost:9000/v1/he/invoices/BC-001234567/chargedetail/report
+
+# Verificar tamaño del archivo en Azure (si es muy grande)
+```
+
+**Solución**:
+1. **Solución Inmediata**: Aumentar timeout en `BillingCenter/modules/configuration/config/integration-config.xml`:
+   ```xml
+   <timeout>60000</timeout> <!-- De 30s a 60s -->
+   ```
+2. **Solución Preventiva**: Implementar descarga asíncrona con polling:
+   - Primera llamada: GET que retorna URL de Azure directamente
+   - BillingCenter descarga desde Azure en background con progress bar
+3. **Workaround**: Usuario puede reintentar manualmente después de esperar
+
+---
+
+#### Error (BillingCenter): "401 Unauthorized - Credenciales inválidas"
+
+**Causa**: El token OAuth que BillingCenter usa para autenticarse con el MicroIntegrador ha expirado o es inválido.
+
+**Diagnóstico (desde BillingCenter)**:
+
+```bash
+# Verificar token actual en configuración
+grep "oauth.*token" BillingCenter/modules/configuration/config/integration-config.xml
+
+# Probar token manualmente
+curl -H "Authorization: Bearer {token}" \
+  http://localhost:9000/v1/health
+
+# Revisar logs de renovación de token
+grep "SuraOAuthProvider.*renew" BillingCenter/logs/billing.log
+```
+
+**Solución**:
+1. Verificar que el servicio de OAuth/Token Provider está activo
+2. Renovar token manualmente en configuración si es necesario
+3. Implementar auto-refresh de token en `SuraOAuthProvider`:
+   ```gosu
+   // En DetailChargeReportHandler.gs
+   if (response.StatusCode == 401) {
+     tokenProvider.refreshToken()
+     response = RestClient.retryWithNewToken()
+   }
+   ```
+4. Verificar que las credenciales de cliente OAuth son correctas
+
+---
+
+#### Error (BillingCenter): "Usuario no ve botón 'Generar detalle de cobro'"
+
+**Causa**: El usuario no tiene los permisos necesarios en BillingCenter o el botón no está configurado correctamente en la PCF de la tabla de facturas colectivas.
+
+**Diagnóstico**:
+
+```bash
+# Verificar permisos del usuario
+# En BillingCenter, revisar roles del usuario en Admin Console
+
+# Verificar configuración de UI (PCF de tabla)
+grep -r "GenerarDetalleCobro.*Button" BillingCenter/modules/configuration/config/web/pcf/*.pcf
+
+# Verificar que la feature está habilitada
+grep "detailcharge.*enabled" BillingCenter/modules/configuration/config/config.xml
+```
+
+**Solución**:
+1. Asignar permisos necesarios al rol del usuario:
+   - Permission: `viewCollectiveInvoices`
+   - Permission: `generateDetailChargeReport`
+2. Verificar configuración del botón en PCF de la tabla:
+   ```xml
+   <!-- En tabla de Facturas Colectivas -->
+   <PCFColumn id="detailChargeColumn">
+     <PCFButton 
+       visible="true" 
+       permission="generateDetailChargeReport"
+       label="Generar detalle de cobro"
+       action="DetailChargeReportHandler.handleGenerarDetalleCobro(invoice)"/>
+   </PCFColumn>
+   ```
+3. Diferenciar del botón "Generar reporte" (básico):
+   ```xml
+   <PCFButton 
+     label="Generar reporte"
+     action="generateBasicReport(invoice)"/>
+   ```
+4. Habilitar feature flag si está deshabilitada
+
+---
 
 #### Error: "INSERT SELECT timeout - Consulta masiva de Guidewire excede límite de tiempo"
 
@@ -1168,6 +1942,10 @@ timeline
 - **Azure Massive Download API**: Documentación interna de Azure Seguros Sura
 - **RabbitMQ Configuración**: Wiki interna de Infraestructura Mensajería
 - **Testing Strategy**: Ver tests en `test/` con estructura espejo de `main/`
+- **BillingCenter**: [Documentación del Componente BillingCenter](./architecture-BillingCenter.md)
+  - Configuración de integración con MicroIntegradores
+  - Código Gosu de handlers (DetailChargeReportHandler.gs)
+  - Configuración de PCF (botones UI)
 
 ---
 
@@ -1175,11 +1953,23 @@ timeline
 
 ### Cobertura Actual
 
-- **Cobertura de tests**: 85%+ (124+ pruebas unitarias)
+- **Cobertura de tests (MicroIntegrador)**: 85%+ (124+ pruebas unitarias)
 - **Distribución de tests por capa**:
   - Application Layer: Tests de Processors (Commands, Queries, WorkQueues)
   - Domain Layer: Tests de Services, Providers, Validators
   - Infrastructure Layer: Tests de Repositories, Mappers, Routes
+
+### Tests de Integración End-to-End
+
+1. **Tests de Integración BillingCenter ↔ MicroIntegrador**
+   - Simulación de llamadas REST desde BillingCenter
+   - Validación de manejo de timeouts y errores
+   - Verificación de flujo completo: POST → procesamiento asíncrono → GET
+
+2. **Tests de WorkQueues** (Scheduled Jobs)
+   - Validación de jobs Quartz ejecutándose en secuencia
+   - Tests de concurrencia y manejo de locks
+   - Simulación de errores en Azure API y recuperación
 
 ### Tipos de Tests
 
@@ -1188,9 +1978,10 @@ timeline
    - Processors de aplicación con mocks de Services
    - Repositories con mocks de JDBC
 
-2. **Tests de Integración** (si existen)
+2. **Tests de Integración**
    - Rutas de Camel end-to-end
    - Integración con BD Oracle (test containers)
+   - Tests end-to-end BillingCenter ↔ MicroIntegrador (simulados)
 
 3. **Mutation Testing** (PIT)
    - Validación de calidad de tests
@@ -1199,7 +1990,8 @@ timeline
 ### Comandos de Testing
 
 ```bash
-# Tests unitarios
+# Tests unitarios del MicroIntegrador
+cd MicroIntegradorReportesVidaGrupo
 ./gradlew test
 
 # Reporte de cobertura (Jacoco)
@@ -1209,13 +2001,35 @@ timeline
 # Mutation testing (PIT)
 ./gradlew pitest
 # Ver: target/pit-reports/pitest/index.html
+
+# Tests de integración (si existen)
+./gradlew integrationTest
 ```
 
 ---
 
 _Documentación generada con Método Ceiba - Arquitecto_  
-_Última actualización: 10 de Noviembre, 2025_  
-_Versión: 2.0 - Actualizado con arquitectura hexagonal modular_
+_Última actualización: 13 de Noviembre, 2025_  
+_Versión: 3.0 - Actualizado con integración completa BillingCenter ↔ MicroIntegrador_
+
+**Cambios en v3.0:**
+- ✅ **NUEVO**: Agregada perspectiva completa desde BillingCenter (iniciación y consumo del flujo)
+- ✅ **NUEVO**: Documentadas pantallas reales de origen: "Facturas Colectivas" y "Devoluciones de Pólizas Colectivas"
+- ✅ **NUEVO**: Diferenciación entre "Generar reporte" (básico) y "Generar detalle de cobro" (integración)
+- ✅ **NUEVO**: Flujo automático de consulta-generación: GET primero, si 404 → POST automático (sin confirmación)
+- ✅ **NUEVO**: Redirección a pantalla dedicada "Detalle de Cobro Disponible" con botón "Descargar Archivo"
+- ✅ **NUEVO**: Mensajes en toolbar de BillingCenter (verde/amarillo/rojo) en lugar de dialogs
+- ✅ **NUEVO**: Diagrama end-to-end mostrando interacción Usuario → BillingCenter → MicroIntegrador → Azure
+- ✅ **NUEVO**: Documentados casos de uso de BillingCenter (CU-BC-01: Consulta y descarga, CU-BC-02: Generación automática)
+- ✅ **NUEVO**: Secuencia detallada de interacción síncrona BC ↔ MI con flujo real
+- ✅ **NUEVO**: Configuración de integración en BillingCenter (XML + Gosu + PCF de descarga)
+- ✅ **NUEVO**: 5 casos de prueba específicos de BillingCenter actualizados con flujo real (TC006-TC010)
+- ✅ **NUEVO**: 3 escenarios de troubleshooting específicos de BC con pantallas correctas
+- ✅ **NUEVO**: Arquitectura de integración actualizada mostrando tabla, handler y pantalla de descarga
+- ✅ **NUEVO**: Tabla de manejo de errores HTTP desde perspectiva del usuario BC con toolbar
+- ✅ Actualizada introducción para reflejar flujo end-to-end completo
+- ✅ Actualizada tabla de componentes incluyendo BillingCenter (Gosu Handler)
+- ✅ Mantenida toda la documentación previa del MicroIntegrador (v2.0)
 
 **Cambios en v2.0:**
 - ✅ Actualizado con estructura hexagonal estricta por capas
