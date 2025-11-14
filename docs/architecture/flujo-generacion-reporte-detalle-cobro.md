@@ -26,22 +26,21 @@ Este documento cubre **ambas perspectivas**: la interacción síncrona desde Bil
 
 **Enfoque Principal**: Documentación técnica del flujo end-to-end desde BillingCenter hasta generación asíncrona en MicroIntegrador  
 **Audiencia**: Desarrolladores, Arquitectos, Analistas de Negocio, Operaciones  
-**Última Actualización**: 13 de Noviembre, 2025  
-**Versión**: 3.0 (Actualizado con integración completa BillingCenter ↔ MicroIntegrador)
+**Última Actualización**: 14 de Noviembre, 2025  
+**Versión**: 3.1 (Refinado con configuración real de BillingCenter y flujo de generación automática nocturna)
 
 ### Componentes Involucrados
 
 | Componente                                  | Tecnología              | Puerto/Contexto                                 | Responsabilidad                                           |
 | ------------------------------------------- | ----------------------- | ----------------------------------------------- | --------------------------------------------------------- |
-| **BillingCenter (Guidewire)**               | Guidewire 8.0.7 + Gosu  | Puerto N/A (web app)                            | Interfaz de usuario, iniciación del flujo vía REST        |
+| **BillingCenter (Guidewire)**               | Guidewire 8.0.7 + Gosu  | Puerto N/A (web app)                            | Interfaz de usuario, iniciación del flujo vía REST, generación automática nocturna |
 | **MicroIntegradorReportesVidaGrupo**        | Apache Camel 3.20.0 + Java 17 | Puerto 9000                           | Microservicio de reportes con arquitectura hexagonal modular |
 | **Módulo: detailcharge**                    | Hexagonal Architecture  | Módulo dentro del microservicio                 | Lógica específica del reporte de detalle de cobro         |
-| **BillingCenter DB (Guidewire)**            | Oracle Database         | Esquema BC                                      | Fuente de datos de facturación y coberturas               |
-| **PolicyCenter DB (Guidewire)**             | Oracle Database         | Esquema PC                                      | Fuente de datos de pólizas y asegurados                   |
+| **Oracle DB Guidewire Replica (LABGWDWH)**  | Oracle Database         | Esquema BC_OWNER + PC_OWNER (réplica)           | Base de datos réplica centralizada para consultas masivas (BC + PC en mismo servidor) |
 | **Azure Massive Download API**              | Microsoft Azure         | https://labapicorevidagrupo.suramericana.com... | Construcción y almacenamiento de archivos masivos         |
-| **RabbitMQ**                                | RabbitMQ                | msglab.suramericana.com.co:5672                 | Notificación asíncrona de cambio de estado a consumidores |
+| **RabbitMQ**                                | RabbitMQ                | msglab.suramericana.com.co:5672                 | Notificación asíncrona a AVA y PorChat (no BillingCenter) |
 | **Oracle DB (Control MicroIntegrador)**     | Oracle Database         | JDBC 19.8.0.0                                   | Tablas de control y estado del proceso                    |
-| **Oracle DB (Guidewire Replica)**           | Oracle Database         | JDBC 19.8.0.0                                   | Réplica read-only de esquemas BC y PC para consultas masivas |
+| **AVA / PorChat**                           | Aplicaciones externas   | N/A                                             | Consumidores externos que usan RabbitMQ y REST (fuera del dominio de Vida Grupo) |
 
 ---
 
@@ -138,7 +137,7 @@ sequenceDiagram
     UI->>GOSU: 4. onClick() → consultarYGenerarDetalle()
     
     GOSU->>WS: 5. GET /v1/he/invoices/{invoiceNumber}/chargedetail/report
-    Note over WS,MI: Llamada REST SÍNCRONA<br/>Timeout: 30 segundos
+    Note over WS,MI: Llamada REST SÍNCRONA<br/>Respuesta típica: <10 segundos
     
     WS->>MI: 6. HTTP GET Request<br/>Header: Authorization Bearer {token}
     MI->>MI: 7. Validar autenticación
@@ -184,8 +183,9 @@ sequenceDiagram
             GOSU->>UI: Mostrar mensaje de error
             UI-->>USER: "El archivo ha expirado.<br/>Genere nuevamente el reporte."
         end
-        
-    else Reporte con ERROR
+    end
+    
+    alt Reporte con ERROR
         DB_MI-->>MI: estado=ERROR
         MI-->>WS: 500 Internal Server Error<br/>{ "error": "Error en generación" }
         WS-->>GOSU: Excepción: ErrorGeneracion
@@ -197,7 +197,7 @@ sequenceDiagram
 
     Note over GOSU: Continuación del flujo cuando GET retorna 404
     GOSU->>WS: POST /v1/he/invoices/{invoiceNumber}/chargedetail/report
-    Note over WS,MI: Llamada REST SÍNCRONA<br/>Timeout: 30 segundos
+    Note over WS,MI: Llamada REST SÍNCRONA<br/>Respuesta típica: <10 segundos
     
     WS->>MI: HTTP POST Request<br/>Header: Authorization Bearer {token}<br/>Body: { "invoiceNumber": "BC-001234567" }
     MI->>MI: Validar autenticación
@@ -282,6 +282,117 @@ sequenceDiagram
 - Usuario informado mediante mensaje en toolbar
 - Usuario puede continuar trabajando en BillingCenter
 
+#### CU-BC-03: Generación Automática Nocturna (Sin Intervención del Usuario)
+
+**Precondiciones**:
+- Proceso batch nocturno ejecutándose (típicamente 00:00 - 06:00)
+- Nueva factura colectiva (`InvoiceCollectivePolicy`) o devolución (`DisbursInvCollective_Ext`) fue creada/actualizada
+- Reglas de Preupdate configuradas para disparar generación automática
+
+**Flujo Principal (Orquestado por EventFired)**:
+
+1. **Batch crea/actualiza Invoice o Disbursement**
+   - Ejemplo: Proceso nocturno crea `InvoiceCollectivePolicy` para póliza #VG-12345
+   - Número de factura: BC-001234567
+
+2. **Regla Preupdate se ejecuta automáticamente**
+   - Archivo: `config/rules/Preupdate/InvoiceCollectivePolicyPreupdate.grs` (para facturas)
+   - Archivo: `config/rules/Preupdate/DisbursInvCollective_ExtPreupdate.grs` (para devoluciones)
+   - Lógica: Si nueva factura colectiva → crear registro `LFReportChargeDetail_Ext`
+
+3. **Se crea entidad `LFReportChargeDetail_Ext`**
+   - Archivo: `config/extensions/entity/LFReportChargeDetail_Ext.eti`
+   - Campos:
+     ```gosu
+     LFReportChargeDetail_Ext {
+       InvoiceCollective: FK a InvoiceCollectivePolicy (nullable)
+       DisbursementCollective: FK a DisbursInvCollective_Ext (nullable)
+       Status: TC ("Pending" | "Sent" | "Completed" | "Error")
+       RequestDate: DateTime
+       ResponseDate: DateTime (nullable)
+     }
+     ```
+   - Util: `gsrc/sura/bc/util/LFReportChargeDetailUtil.gs` crea registro con Status="Pending"
+
+4. **Sistema dispara EventFired automáticamente**
+   - Archivo: `config/rules/EventMessage/EventFired.grs`
+   - Condición: `if (evento.EventName == "GenerateChargeDetailReport")`
+   - Acción: Crear mensaje en cola para `GenerateChargeDetailReportTransport`
+
+5. **Transport procesa el mensaje**
+   - Plugin: `config/plugin/registry/GenerateChargeDetailReportTransport.gwp`
+   - Handler: `gsrc/sura/bc/grouplife/GenerateChargeDetailReportTransport.gs`
+   - Lógica:
+     ```gosu
+     override function send(message : Message, transformedPayload : String) {
+       var invoiceNumber = extractInvoiceNumber(transformedPayload)
+       var serviceFacade = new ChargeDetailReportServiceFacade()
+       
+       try {
+         // Invocar POST directamente (no GET previo)
+         var response = serviceFacade.generateChargeDetailReport(invoiceNumber)
+         
+         // Actualizar LFReportChargeDetail_Ext
+         updateStatusToSent(invoiceNumber, response)
+         
+       } catch (e : Exception) {
+         updateStatusToError(invoiceNumber, e.Message)
+         logError(e)
+       }
+     }
+     ```
+
+6. **MicroIntegrador recibe POST nocturno**
+   - Endpoint: `POST /v1/he/invoices/{invoiceNumber}/chargedetail/report`
+   - Registra solicitud en BD (estado=1)
+   - Responde 200 OK inmediatamente
+
+7. **WorkQueues procesan en background**
+   - WorkQueue 4 (ejecución diaria) procesa solicitudes nocturnas
+   - Tiempo estimado: 1-3 horas según volumen
+
+8. **Siguiente día: Usuario hace click en botón**
+   - Usuario invoca CU-BC-01 (consulta)
+   - GET retorna 200 OK con URL de descarga
+   - Usuario descarga archivo directamente (sin espera)
+
+**Postcondiciones**:
+- Registro `LFReportChargeDetail_Ext` creado con Status="Sent"
+- Solicitud registrada en MicroIntegrador (estado=1)
+- Archivo estará disponible para descarga al día siguiente (sin intervención manual)
+
+**Archivos Involucrados en el Flujo Automático**:
+
+| Componente                          | Archivo                                                                         | Responsabilidad                                    |
+| ----------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Entidad de tracking                 | `config/extensions/entity/LFReportChargeDetail_Ext.eti`                         | Almacenar estado de solicitudes automáticas        |
+| Utilidad de creación                | `gsrc/sura/bc/util/LFReportChargeDetailUtil.gs`                                | Crear registros LFReportChargeDetail_Ext           |
+| Regla Preupdate (Facturas)          | `config/rules/Preupdate/InvoiceCollectivePolicyPreupdate.grs`                  | Disparar creación de registro al crear factura     |
+| Regla Preupdate (Devoluciones)      | `config/rules/Preupdate/DisbursInvCollective_ExtPreupdate.grs`                 | Disparar creación de registro al crear devolución  |
+| Regla EventFired                    | `config/rules/EventMessage/EventFired.grs`                                     | Crear mensaje para transport                       |
+| Plugin de transport                 | `config/plugin/registry/GenerateChargeDetailReportTransport.gwp`               | Registrar transport en Guidewire                   |
+| Handler de transport                | `gsrc/sura/bc/grouplife/GenerateChargeDetailReportTransport.gs`                | Ejecutar POST al MicroIntegrador                   |
+| Configuración de mensajes           | `config/messaging/messaging-config.xml`                                        | Definir destination y message para el evento       |
+| Fachada de servicio (compartida)    | `gsrc/sura/bc/grouplife/ChargeDetailReportServiceFacade.gs`                    | Invocar POST (reutiliza lógica manual)             |
+
+**Configuración de Messaging** (`messaging-config.xml`):
+
+```xml
+<messaging-config>
+  <destinations>
+    <destination name="GenerateChargeDetailReportQueue">
+      <transport>GenerateChargeDetailReportTransport</transport>
+    </destination>
+  </destinations>
+  
+  <message-events>
+    <message-event name="GenerateChargeDetailReport" destination="GenerateChargeDetailReportQueue">
+      <payload-transformer>sura.bc.transformer.ChargeDetailReportPayloadTransformer</payload-transformer>
+    </message-event>
+  </message-events>
+</messaging-config>
+```
+
 ### Manejo de Errores desde BillingCenter
 
 | Código HTTP | Escenario                           | Mensaje al Usuario                                                  | Acción Sugerida                      |
@@ -293,142 +404,271 @@ sequenceDiagram
 | **409**     | Reporte duplicado (POST)            | "El reporte ya está siendo procesado. Por favor intente más tarde." | Mostrar toolbar (permanecer en tabla)|
 | **500**     | Error en generación                 | "Ocurrió un error en el sistema. Contacte soporte técnico."         | Mostrar toolbar rojo + log error     |
 | **401/403** | Error de autenticación              | "Sesión expirada. Inicie sesión nuevamente."                        | Redirect a login                     |
-| **Timeout** | Timeout de red (>30s)               | "El servicio no responde. Intente nuevamente en unos minutos."      | Mostrar toolbar rojo                 |
+
+**Nota sobre Timeouts**: Los procesos pesados (construcción de archivo, bloques, carga a Azure) se ejecutan asíncronamente en WorkQueues del MicroIntegrador. Las respuestas del GET y POST raramente superan los 10 segundos, por lo que no se espera que ocurran timeouts en condiciones normales de operación.
 
 ### Configuración de Integración en BillingCenter
 
-**Archivo de Configuración**: `BillingCenter/modules/configuration/config/integration-config.xml`
+**Archivos de Configuración por Ambiente**:
+
+BillingCenter utiliza archivos XML de configuración separados por ambiente para parametrizar el endpoint del MicroIntegrador:
+
+- `BillingCenter/modules/configuration/config/import/gen/WService_Ext.xml` (desarrollo local)
+- `BillingCenter/modules/configuration/config/import/gen/dllo-WService_Ext.xml` (desarrollo)
+- `BillingCenter/modules/configuration/config/import/gen/uat-WService_Ext.xml` (UAT)
+- `BillingCenter/modules/configuration/config/import/gen/pdn-WService_Ext.xml` (producción)
+
+**Configuración del Servicio** (`public-id="bc:60"`):
 
 ```xml
-<!-- Configuración de integración con MicroIntegradorReportesVidaGrupo -->
-<integration id="microintegrador-reportes">
-  <endpoint>
-    <name>DetailChargeReportService</name>
-    <url>http://localhost:9000/v1/he/invoices/{invoiceNumber}/chargedetail/report</url>
-    <timeout>30000</timeout> <!-- 30 segundos -->
-    <retries>2</retries>
-  </endpoint>
-  
-  <authentication>
-    <type>Bearer</type>
-    <tokenProvider>SuraOAuthProvider</tokenProvider>
-  </authentication>
-  
-  <error-handling>
-    <on-404>SHOW_GENERATE_OPTION</on-404>
-    <on-409>REDIRECT_TO_QUERY</on-409>
-    <on-timeout>RETRY_WITH_BACKOFF</on-timeout>
-  </error-handling>
-</integration>
+<WService_Ext public-id="bc:60">
+    <Exchange/>
+    <Password/>
+    <Queue/>
+    <Localization>https://labapicorevidagrupo.suramericana.com/vidagruporeportes/v1/he/invoices</Localization>
+    <LocalizationType>EndPoint</LocalizationType>
+    <RoutingKey/>
+    <SecurityType>none</SecurityType>
+    <ServiceName>ChargeDetailReport</ServiceName>
+    <Version>1.0</Version>
+    <User_Ext>Y29yZWd3OmNvOHJlOTUxKkcvNjUwdw=</User_Ext>
+    <ApiKey>f8b7a06d70904951b04f35f433f038c6</ApiKey>
+</WService_Ext>
 ```
 
-**Código Gosu (Ejemplo Simplificado)**:
+**Descripción de Campos**:
+- **Localization**: URL base del MicroIntegrador (sin el path específico del invoice)
+- **ServiceName**: Identificador del servicio usado en código Gosu para obtener configuración
+- **User_Ext**: Credenciales en Base64 (`coregw:co8re951*G/650w`)
+- **ApiKey**: API Key para autenticación en el MicroIntegrador
+
+### Implementación del Código Gosu
+
+**Arquitectura de Clases**:
+
+```
+ChargeDetailReportIntegrationAPI (clase base REST)
+    ↓ extends
+ChargeDetailReportWS (cliente HTTP)
+    ↓ uses
+ChargeDetailReportServiceFacade (fachada de servicio)
+    ↓ calls
+GenerateChargeDetailReportExport (lógica de negocio principal)
+```
+
+#### 1. Clase Base de Integración REST
+
+**Archivo**: `BillingCenter/modules/configuration/gsrc/sura/bc/grouplife/ChargeDetailReportIntegrationAPI.gs`
 
 ```gosu
-// Archivo: BillingCenter/modules/configuration/gsrc/sura/bc/invoice/DetailChargeReportHandler.gs
+package sura.bc.grouplife
 
-package sura.bc.invoice
+uses sura.suite.gw.webservice.SuraRestConfigurationProvider
+uses org.apache.http.client.methods.HttpPost
+uses org.apache.http.client.methods.HttpGet
+uses org.apache.http.client.methods.HttpRequestBase
+uses sura.suite.gw.rest.RestClient
+uses sura.constants.ChargeDetailReportConstant
+uses sura.constants.NumbersConstant
 
-uses gw.api.web.WebserviceClient
-uses sura.util.RestClient
+class ChargeDetailReportIntegrationAPI extends SuraRestConfigurationProvider {
+  
+  protected function doPostRequest(url : String) : String {
+    var httpPostInstance = getHttpPostInstance(url)
+    return executeRequest(httpPostInstance)
+  }
 
-class DetailChargeReportHandler {
-  
-  /**
-   * Handler principal del botón "Generar detalle de cobro"
-   * Primero consulta (GET), si no existe genera automáticamente (POST)
-   * @param invoice La factura para la cual se consulta/genera el detalle
-   */
-  function handleGenerarDetalleCobro(invoice : Invoice) {
-    var invoiceNumber = invoice.InvoiceNumber
-    var endpoint = "http://localhost:9000/v1/he/invoices/${invoiceNumber}/chargedetail/report"
-    
-    try {
-      // PASO 1: Intentar consultar reporte existente (GET)
-      var response = RestClient.get(endpoint)
-      
-      if (response.StatusCode == 200) {
-        // Reporte completado: Redirigir a pantalla de descarga
-        var downloadUrl = response.JsonBody["downloadUrl"] as String
-        redirectToDownloadScreen(invoice, downloadUrl)
-        
-      } else if (response.StatusCode == 404) {
-        var message = response.JsonBody["message"] as String
-        
-        if (message.contains("en proceso")) {
-          // Reporte en proceso: Mostrar mensaje en toolbar
-          showToolbarMessage("El reporte está siendo generado. Por favor intente más tarde.", "warning")
-        } else {
-          // Reporte no existe: GENERAR AUTOMÁTICAMENTE (sin confirmación)
-          generarReporteAutomaticamente(invoice)
-        }
-      } else if (response.StatusCode == 500) {
-        showToolbarMessage("Ocurrió un error en el sistema. Contacte soporte técnico.", "error")
-      }
-      
-    } catch (e : TimeoutException) {
-      showToolbarMessage("El servicio no responde. Intente nuevamente en unos minutos.", "error")
-    }
+  protected function doGetRequest(url : String) : String {
+    var httpGetInstance = getHttpGetInstance(url)
+    return executeRequest(httpGetInstance)
   }
-  
-  /**
-   * Genera el reporte automáticamente cuando no existe (POST)
-   * @param invoice La factura para generar el detalle
-   */
-  private function generarReporteAutomaticamente(invoice : Invoice) {
-    var invoiceNumber = invoice.InvoiceNumber
-    var endpoint = "http://localhost:9000/v1/he/invoices/${invoiceNumber}/chargedetail/report"
-    
-    try {
-      var response = RestClient.post(endpoint, {"invoiceNumber": invoiceNumber})
-      
-      if (response.StatusCode == 200) {
-        // Solicitud registrada exitosamente
-        showToolbarMessage("El archivo está en proceso de generación. Por favor intente más tarde.", "success")
-      } else if (response.StatusCode == 409) {
-        // Race condition: Otro usuario ya generó entre GET y POST
-        showToolbarMessage("El reporte ya está siendo procesado. Por favor intente más tarde.", "warning")
-      } else {
-        showToolbarMessage("Error al solicitar generación del reporte.", "error")
-      }
-    } catch (e : TimeoutException) {
-      showToolbarMessage("El servicio no responde. Intente nuevamente.", "error")
-    }
-  }
-  
-  /**
-   * Redirige a pantalla de descarga con botón
-   * @param invoice La factura
-   * @param downloadUrl URL de Azure para descarga
-   */
-  private function redirectToDownloadScreen(invoice : Invoice, downloadUrl : String) {
-    // Navegar a pantalla "DetailChargeDownloadScreen.pcf"
-    // Pasar invoice y downloadUrl como parámetros
-    pcf.DetailChargeDownloadScreen.go(invoice, downloadUrl)
-  }
-  
-  /**
-   * Muestra mensaje en toolbar de BillingCenter
-   * @param message Mensaje a mostrar
-   * @param type Tipo: "success", "warning", "error"
-   */
-  private function showToolbarMessage(message : String, type : String) {
-    // Implementación de toolbar message según tipo
-    if (type == "success") {
-      gw.api.util.LocationUtil.addRequestScopedInfoMessage(message)
-    } else if (type == "warning") {
-      gw.api.util.LocationUtil.addRequestScopedWarningMessage(message)
+
+  override property get BasicSecurity() : String {
+    if (Config == null || GosuStringUtil.isBlank(Config.User_Ext)) {
+      return null
     } else {
-      gw.api.util.LocationUtil.addRequestScopedErrorMessage(message)
+      return "Basic ".concat(Config.User_Ext)
     }
+  }
+
+  protected function executeRequest(methodHttp : HttpRequestBase) : String {
+    // Agregar headers de autenticación
+    methodHttp.addHeader(ChargeDetailReportConstant.HEADER_AUTHORIZATION, BasicSecurity)
+    methodHttp.addHeader(ChargeDetailReportConstant.HEADER_API_KEY, ApiKey)
+    
+    return getRestClient().executeService(methodHttp)
+  }
+
+  protected property get RestClient() : RestClient {
+    return new RestClient(getTimeOut())
+  }
+
+  protected property get TimeOut() : Long {
+    return NumbersConstant.TIME_OUT_MILLISECONDS
   }
 }
 ```
 
-**Configuración de PCF (Pantalla de Descarga)**:
+#### 2. Cliente Web Service
+
+**Archivo**: `BillingCenter/modules/configuration/gsrc/sura/bc/grouplife/ChargeDetailReportWS.gs`
+
+```gosu
+package sura.bc.grouplife
+
+uses org.apache.commons.lang3.StringUtils
+uses sura.constants.ChargeDetailReportConstant
+
+class ChargeDetailReportWS extends ChargeDetailReportIntegrationAPI {
+
+  construct() {
+    super.configure(ChargeDetailReportConstant.SERVICE_NAME)
+  }
+
+  protected function generateChargeDetailReport(invoiceOrDisbursementCollectiveNumber : String) : String {
+    return doPostRequest(getUrlForChargeDetailReportService(invoiceOrDisbursementCollectiveNumber))
+  }
+
+  protected function getChargeDetailReport(invoiceOrDisbursementCollectiveNumber : String) : String {
+    return doGetRequest(getUrlForChargeDetailReportService(invoiceOrDisbursementCollectiveNumber))
+  }
+
+  protected function getUrlForChargeDetailReportService(invoiceOrDisbursementCollectiveNumber : String) : String {
+    var invoiceNumberClean = invoiceOrDisbursementCollectiveNumber
+        .replaceAll(ChargeDetailReportConstant.BLANK_SPACE_REGEX, StringUtils.EMPTY)
+
+    return getUrlService() + "/${invoiceNumberClean}" +
+        ChargeDetailReportConstant.CHARGE_DETAIL_PATH +
+        ChargeDetailReportConstant.REPORT_PATH
+  }
+
+  protected property get UrlService() : String {
+    return "${Location}"
+  }
+}
+```
+
+#### 3. Fachada de Servicio
+
+**Archivo**: `BillingCenter/modules/configuration/gsrc/sura/bc/grouplife/ChargeDetailReportServiceFacade.gs`
+
+```gosu
+package sura.bc.grouplife
+
+class ChargeDetailReportServiceFacade implements IChargeDetailReportServiceFacade {
+  
+  override function generateChargeDetailReport(invoiceOrDisbursementCollectiveNumber : String) : String {
+    return getChargeDetailReportWSInstance().generateChargeDetailReport(invoiceOrDisbursementCollectiveNumber)
+  }
+
+  override function getChargeDetailReport(invoiceOrDisbursementCollectiveNumber : String) : String {
+    return getChargeDetailReportWSInstance().getChargeDetailReport(invoiceOrDisbursementCollectiveNumber)
+  }
+
+  protected property get ChargeDetailReportWSInstance() : ChargeDetailReportWS {
+    return new ChargeDetailReportWS()
+  }
+}
+```
+
+#### 4. Lógica de Negocio Principal (Handler del Botón)
+
+**Archivo**: `BillingCenter/modules/configuration/gsrc/sura/bc/exportdata/GenerateChargeDetailReportExport.gs`
+
+```gosu
+package sura.bc.exportdata
+
+uses com.google.gson.GsonBuilder
+uses gw.api.util.DisplayableException
+uses org.apache.commons.lang3.StringUtils
+uses sura.bc.grouplife.ChargeDetailReportServiceFacade
+uses sura.constants.ChargeDetailReportConstant
+uses pcf.ChargeDetailReportDownloadPopup
+uses java.util.Map
+
+class GenerateChargeDetailReportExport {
+  private static final var _JSON = new GsonBuilder().serializeNulls().create()
+  private var _logger = LoggerFactory.getLogger(ChargeDetailReportConstant.SERVICE_NAME)
+
+  /**
+   * Método principal invocado por los PCFs
+   * Realiza GET primero, si no existe (404) → POST automático
+   */
+  public function process(invoiceOrDisbursementCollectiveNumber : String) : void {
+    try {
+      // PASO 1: Intentar GET (consultar reporte existente)
+      var responseStr = getChargeDetailReportServiceFacade()
+          .getChargeDetailReport(invoiceOrDisbursementCollectiveNumber)
+      var responseMap = parseResponse(responseStr)
+      
+      processResponseMap(responseMap, invoiceOrDisbursementCollectiveNumber)
+      
+    } catch(exception : DisplayableException) {
+      _logger.error(exception.Message, exception)
+      throw new DisplayableException(exception.Message)
+    } catch(exception : Exception) {
+      var message = displaykey.Sura.GroupLife.ChargeDetailReport.ErrorToGetChargeDatailReportURL
+      _logger.error(message, exception)
+      throw new DisplayableException(message + exception.Message)
+    }
+  }
+
+  protected function processResponseMap(responseMap : Map, invoiceNumber : String) : void {
+    var fileUrl = extractFileUrl(responseMap)
+
+    if (isValidFileUrl(fileUrl)) {
+      // Reporte existe → Redirigir a pantalla de descarga
+      _logger.info(ChargeDetailReportConstant.MSG_URL_OBTAINED + fileUrl)
+      ChargeDetailReportDownloadPopup.push(fileUrl)
+    } else {
+      // Reporte no existe → Generar automáticamente (POST)
+      processGenerateChargeDetailReport(invoiceNumber)
+    }
+  }
+
+  protected function processGenerateChargeDetailReport(invoiceNumber : String) : void {
+    try {
+      var responseStr = getChargeDetailReportServiceFacade()
+          .generateChargeDetailReport(invoiceNumber)
+
+      if (responseStr != null) {
+        // Muestra mensaje en toolbar: "En proceso de generación..."
+        throw new DisplayableException(
+          displaykey.Sura.GroupLife.ChargeDetailReport.ChargeDatailReportInProcess)
+      } else {
+        throw new DisplayableException(
+          displaykey.Sura.GroupLife.ChargeDetailReport.ErrorInvalidResponse)
+      }
+    } catch(exception : DisplayableException) {
+      _logger.error(exception.Message, exception)
+      throw new DisplayableException(exception.Message)
+    }
+  }
+
+  protected function parseResponse(responseStr : String) : Map {
+    return _JSON.fromJson(responseStr, Map)
+  }
+
+  protected function extractFileUrl(responseMap : Map) : String {
+    if (responseMap.containsKey(ChargeDetailReportConstant.KEY_URL_ARCHIVE)) {
+      return responseMap.get(ChargeDetailReportConstant.KEY_URL_ARCHIVE) as String
+    }
+    return null
+  }
+
+  protected property get ChargeDetailReportServiceFacade() : ChargeDetailReportServiceFacade {
+    return new ChargeDetailReportServiceFacade()
+  }
+}
+```
+
+#### 5. PCFs que invocan el proceso
+
+**Archivo**: `BillingCenter/modules/configuration/config/web/pcf/account/AccountDetailCollectiveInvoices.pcf`
+**Archivo**: `BillingCenter/modules/configuration/config/web/pcf/account/AccountDetailCollectiveDisbursement.pcf`
 
 ```xml
-<!-- Archivo: BillingCenter/modules/configuration/config/web/pcf/DetailChargeDownloadScreen.pcf -->
+<!-- Botón en tabla de Facturas Colectivas -->
 <PCF
   xmlns="urn:guidewire:pcf"
   title="Detalle de Cobro Disponible">
@@ -464,42 +704,51 @@ class DetailChargeReportHandler {
 
 ### Puntos Críticos de Error en BillingCenter
 
-#### Error: "Timeout al consultar MicroIntegrador (>30 segundos)"
+#### Error: "Credenciales de autenticación inválidas (401 Unauthorized)"
 
-**Causa**: El MicroIntegrador está descargando un archivo muy grande desde Azure y no responde dentro del timeout configurado.
+**Causa**: Las credenciales Base64 o ApiKey configuradas en `WService_Ext.xml` son inválidas o han cambiado en el MicroIntegrador.
+
+**Diagnóstico**:
+```bash
+# Verificar credenciales en config actual (LAB environment)
+# Archivo: BillingCenter/modules/configuration/config/import/gen/WService_Ext.xml
+# Buscar: public-id="bc:60"
+#   - User_Ext: Y29yZWd3OmNvOHJlOTUxKkcvNjUwdw== (coregw:co8re951*G/650w)
+#   - ApiKey: f8b7a06d70904951b04f35f433f038c6
+
+# Probar credenciales directamente
+curl -H "Authorization: Basic Y29yZWd3OmNvOHJlOTUxKkcvNjUwdw==" \
+     -H "ApiKey: f8b7a06d70904951b04f35f433f038c6" \
+  https://labapicorevidagrupo.suramericana.com/vidagruporeportes/v1/health
+```
+
+**Solución**:
+1. Verificar que el usuario `coregw` existe en el MicroIntegrador
+2. Sincronizar credenciales entre ambientes (DLLO, UAT, PDN)
+3. Actualizar `WService_Ext.xml` correspondiente al ambiente
+4. Reiniciar BillingCenter para recargar configuración
+
+#### Error: "Archivo expirado (404 después de descarga exitosa)"
+
+**Causa**: El archivo en Azure tiene una política de expiración de 7 días. Después de ese período, Azure retorna 404 y el MicroIntegrador marca el reporte como expirado.
 
 **Diagnóstico**:
 ```gosu
 // Revisar logs de BillingCenter
 // Archivo: BillingCenter/logs/billing.log
-// Buscar: "Timeout" + "MicroIntegrador" + invoiceNumber
+// Buscar: "Archivo expirado" + invoiceNumber
+
+// Verificar en MicroIntegrador BD:
+SELECT estado, fechaCreacion, fechaExpiracion, urlArchivo
+FROM principal
+WHERE invoiceNumber = 'BC-001234567';
+-- Estado esperado: EXPIRED (6)
 ```
 
 **Solución**:
-1. **Solución Inmediata**: Aumentar timeout en `integration-config.xml` de 30s a 60s
-2. **Solución a Mediano Plazo**: Implementar patrón asíncrono:
-   - POST para solicitar generación
-   - GET con polling cada 30 segundos hasta que estado=5
-   - Mostrar progress bar al usuario
-
-#### Error: "Credenciales de autenticación inválidas (401 Unauthorized)"
-
-**Causa**: El token OAuth usado por BillingCenter para autenticarse con MicroIntegrador ha expirado o es inválido.
-
-**Diagnóstico**:
-```bash
-# Verificar token actual
-curl -H "Authorization: Bearer {token}" \
-  http://localhost:9000/v1/health
-
-# Verificar configuración en BillingCenter
-grep "oauth" BillingCenter/modules/configuration/config/integration-config.xml
-```
-
-**Solución**:
-1. Renovar token en `SuraOAuthProvider`
-2. Verificar que el servicio de OAuth está activo
-3. Implementar refresh automático de token en el cliente
+1. **Para el usuario**: Click nuevamente en "Generar detalle de cobro" → Generará automáticamente (POST)
+2. **Optimización**: Implementar notificación proactiva antes de expiración (día 5/7)
+3. **Alternativa**: Aumentar TTL de archivos en Azure de 7 a 30 días
 
 ---
 
@@ -537,7 +786,7 @@ sequenceDiagram
     Note over USER,MQ: FASE 1: SOLICITUD DESDE BILLINGCENTER (SÍNCRONA)
 
     USER->>BC: 1. Click "Generar Detalle de Cobro"<br/>Invoice #BC-001234567
-    BC->>MI_API: 2. POST /v1/he/invoices/BC-001234567/chargedetail/report<br/>Timeout: 30s
+    BC->>MI_API: 2. POST /v1/he/invoices/BC-001234567/chargedetail/report<br/>Respuesta típica: <10 seg
     MI_API->>MI_DB: 3. INSERT registro (estado=1, lock=0)
     MI_DB-->>MI_API: OK
     MI_API-->>BC: 4. 200 OK - Solicitud registrada
@@ -2009,8 +2258,32 @@ cd MicroIntegradorReportesVidaGrupo
 ---
 
 _Documentación generada con Método Ceiba - Arquitecto_  
-_Última actualización: 13 de Noviembre, 2025_  
-_Versión: 3.0 - Actualizado con integración completa BillingCenter ↔ MicroIntegrador_
+_Última actualización: 14 de Noviembre, 2025_  
+_Versión: 3.1 - Refinamiento técnico con archivos reales y generación automática nocturna_
+
+**Cambios en v3.1:**
+- ✅ **CRÍTICO**: Actualizada arquitectura de datos con **Oracle Guidewire Replica (LABGWDWH)** en lugar de bases de datos BC/PC separadas
+  - Consultas masivas ahora apuntan a esquemas `BC_OWNER` y `PC_OWNER` en la réplica centralizada
+  - Elimina carga en base transaccional de Guidewire
+- ✅ **CRÍTICO**: Clarificado alcance de **RabbitMQ**: Solo para notificaciones asíncronas a **AVA** y **PorChat** (NO BillingCenter)
+  - BillingCenter usa llamadas REST síncronas GET/POST (no mensajería)
+- ✅ **NUEVO**: Agregado **Caso de Uso CU-BC-03**: Generación Automática Nocturna vía EventFired
+  - Documentado flujo completo: Batch → InvoiceCollectivePolicy → Preupdate → LFReportChargeDetail_Ext → EventFired → POST
+  - Archivos involucrados: `LFReportChargeDetail_Ext.eti`, `InvoiceCollectivePolicyPreupdate.grs`, `GenerateChargeDetailReportTransport.gs`
+  - Configuración de messaging: `messaging-config.xml` con destinations y message-events
+- ✅ **CRÍTICO**: Reemplazados ejemplos genéricos con **archivos reales de BillingCenter**:
+  - Configuración real de `WService_Ext.xml` (public-id="bc:60") con credenciales y endpoints LAB
+  - Código Gosu real: `ChargeDetailReportIntegrationAPI`, `ChargeDetailReportWS`, `ChargeDetailReportServiceFacade`, `GenerateChargeDetailReportExport`
+  - Referencias a PCFs reales: `AccountDetailCollectiveInvoices.pcf`, `AccountDetailCollectiveDisbursement.pcf`
+- ✅ **OPTIMIZACIÓN**: Eliminadas referencias a **timeouts en BillingCenter**:
+  - Aclarado que respuestas GET/POST raramente superan 10 segundos (procesos pesados en WorkQueues)
+  - Removida sección "Error: Timeout al consultar MicroIntegrador" del troubleshooting
+  - Actualizada tabla de manejo de errores (eliminada fila de Timeout)
+  - Actualizados diagramas: "Timeout: 30s" → "Respuesta típica: <10 seg"
+- ✅ **CORRECCIÓN**: Arreglado error de sintaxis en diagrama Mermaid (bloque `else` mal posicionado)
+- ✅ Actualizada tabla de componentes con información técnica precisa
+- ✅ Agregada documentación de archivos de automatización nocturna (7 archivos críticos)
+- ✅ Mantenida toda la documentación previa de BillingCenter (v3.0) y MicroIntegrador (v2.0)
 
 **Cambios en v3.0:**
 - ✅ **NUEVO**: Agregada perspectiva completa desde BillingCenter (iniciación y consumo del flujo)
