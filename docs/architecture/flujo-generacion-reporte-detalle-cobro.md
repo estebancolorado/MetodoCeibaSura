@@ -171,15 +171,16 @@ sequenceDiagram
         USER->>UI: Click en "Descargar Archivo"
         UI->>GOSU: Invocar descarga
         GOSU->>AZURE: GET {azure_url} directamente
-        AZURE-->>GOSU: Archivo CSV completo
-        GOSU->>UI: Trigger descarga en navegador
-        UI-->>USER: Descarga automática:<br/>"detalle_cobro_BC-001234567.csv"
-            
+        
+        alt Archivo disponible en Azure
+            AZURE-->>GOSU: Archivo CSV completo
+            GOSU->>UI: Trigger descarga en navegador
+            UI-->>USER: Descarga automática:<br/>"detalle_cobro_BC-001234567.csv"
         else Archivo expirado o no disponible
-            AZURE-->>MI: 404 Not Found / 410 Gone
+            AZURE-->>GOSU: 404 Not Found / 410 Gone
+            GOSU->>MI: Notificar expiración
             MI->>DB_MI: UPDATE estado=EXPIRED
-            MI-->>WS: 404 Not Found<br/>{ "error": "Archivo expirado.<br/>Solicite nueva generación" }
-            WS-->>GOSU: Excepción: ArchivoExpirado
+            MI-->>GOSU: Confirmación
             GOSU->>UI: Mostrar mensaje de error
             UI-->>USER: "El archivo ha expirado.<br/>Genere nuevamente el reporte."
         end
