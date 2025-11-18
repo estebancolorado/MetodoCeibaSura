@@ -58,7 +58,8 @@ return processData(currentVariable)
 **REGLA OBLIGATORIA**: 
 - **NO dejar código comentado** - Eliminar código no utilizado
 - Si se necesita el código antiguo, recuperarlo del sistema de control de versiones
-- Comentarios solo para explicar lógica compleja (máximo 2 líneas)
+- **NO usar comentarios para documentar código** - El código debe ser autoexplicativo
+- Comentarios solo en casos extremadamente complejos (muy raro, debe evitarse)
 
 #### 3. Formato de Archivos
 
@@ -86,6 +87,31 @@ class MyClass {
 - **No dejar líneas vacías al inicio** del archivo
 - **No dejar líneas vacías al final** del archivo
 - Agrupar líneas de código de manera lógica (inicialización, operaciones, retorno)
+
+#### 4. Strings Literales
+
+```gosu
+// ❌ INCORRECTO - Strings literales en el código
+if (status == "ACTIVE") {
+  logger.error("Error procesando póliza")
+  throw new Exception("Estado inválido")
+}
+
+// ✅ CORRECTO - Usar constantes
+if (status == PolicyConstants.STATUS_ACTIVE) {
+  logger.error(LogMessages.POLICY_PROCESSING_ERROR)
+  throw new Exception(ErrorMessages.INVALID_STATUS)
+}
+
+// ✅ CORRECTO (Guidewire) - DisplayKeys para mensajes al usuario
+util.Logger.logError(displaykey.Sura.PolicyError.ProcessingFailed)
+```
+
+**REGLA OBLIGATORIA**: 
+- **NO usar strings literales** en el código
+- Declarar todos los strings en **clases de constantes** apropiadas
+- En Guidewire: usar **DisplayKeys** (con prefijo `Sura.`) para mensajes al usuario
+- Excepciones: strings en tests unitarios (arrange/assert)
 
 ---
 
@@ -367,7 +393,7 @@ return result
 
 ```gosu
 // ✅ CORRECTO - Comparar constante primero
-if ("ACTIVE".equalsIgnoreCase(policyStatus)) {
+if (PolicyConstants.STATUS_ACTIVE.equalsIgnoreCase(policyStatus)) {
   processPolicy()
 }
 
@@ -384,9 +410,10 @@ print(policyPeriod.DisplayName)  // Sin validación de null
 ```
 
 **REGLAS OBLIGATORIAS**:
-- Comparar sobre constantes para evitar `NullPointerException`
+- Comparar sobre **constantes** para evitar `NullPointerException`
 - Usar `equalsIgnoreCase` cuando sea posible
 - Validar nulos antes de acceder a propiedades
+- **NO usar strings literales** - usar constantes
 
 ### 5. Uso de Paréntesis en Expresiones
 
@@ -441,31 +468,7 @@ class MyClass {
 - **2 líneas en blanco**: Entre clases/interfaces, entre métodos (excepto el último)
 - **1 línea en blanco**: Después de variables locales, entre bloques de código
 
-### 8. Comentarios Javadoc
-
-```gosu
-/**
- * Calcula el precio total incluyendo impuestos y descuentos
- * @param items - Lista de items del carrito
- * @param taxRate - Tasa de impuesto (0-1)
- * @returns Precio total con impuestos aplicados
- */
-function calculateTotalWithTax(items : List<Item>, taxRate : BigDecimal) : BigDecimal {
-  if (items == null or items.Empty) {
-    throw new IllegalArgumentException("Items debe ser un array válido")
-  }
-  
-  var subtotal = items.sum(\ item -> item.Price)
-  return subtotal * (1 + taxRate)
-}
-```
-
-**REGLAS**:
-- Usar estilo Javadoc `/** */` para métodos complejos
-- Máximo 2 líneas de comentario
-- Comentario en líneas aparte con `*` al inicio
-
-### 9. Variables y Propiedades Públicas
+### 8. Variables y Propiedades Públicas
 
 ```gosu
 // ✅ CORRECTO - Propiedad pública con variable privada
@@ -501,7 +504,9 @@ class VinIdentifier {
 
 **REGLA**: **NO usar variables estáticas mutables** - son compartidas por toda la JVM
 
-### 11. Optimización de Rendimiento
+### 10. Optimización de Rendimiento
+
+**NOTA**: En todos los ejemplos, evitar strings literales y usar constantes.
 
 #### Evitar Llamadas Repetidas a Métodos
 
@@ -587,7 +592,7 @@ function computeSomething() {
 }
 ```
 
-### 12. Query Builder y Base de Datos
+### 11. Query Builder y Base de Datos
 
 #### Uso de Activity.Pattern.Code
 
@@ -665,7 +670,7 @@ result.orderByDescending(\ row -> row.CreatedDate)
 **REGLA CRÍTICA**: Entidades `Retirable` o `Versionable` tienen columna `Retired`.  
 Todos los índices **DEBEN incluir la columna `Retired`**.
 
-### 13. Concatenación de Strings (Rendimiento)
+### 12. Concatenación de Strings (Rendimiento)
 
 | Técnica | Rendimiento | Ejemplo |
 |---------|-------------|---------|
@@ -678,7 +683,9 @@ Todos los índices **DEBEN incluir la columna `Retired`**.
 
 **RECOMENDACIÓN**: Usar **templates de Gosu** o **literals** cuando sea posible
 
-### 14. GX Model para Integraciones
+**NOTA**: Evitar strings literales - usar constantes para strings reutilizables
+
+### 13. GX Model para Integraciones
 
 ```gosu
 // ✅ CORRECTO - Usar GX Model para XML
@@ -695,7 +702,7 @@ var json = gson.toJson(myObject)
 - **XML**: Usar GX Model con DTO (no entidades directamente)
 - **JSON**: Usar librería Gson
 
-### 15. Plugins
+### 14. Plugins
 
 ```gosu
 // ❌ INCORRECTO - Instancia local (bajo rendimiento)
@@ -963,6 +970,7 @@ class MyAbstractClassTest extends EESuraTestBase {
 - `Mockito.verify(...)` directamente - Usar métodos específicos
 - `mockStatic(entity.Claim)` - No usar mockStatic con entidades
 - `verifyStatic(...)` sin instancia en enhancements
+- Usar strings literales en código de producción (permitido en tests)
 
 ### 14. Generador de Pruebas Unitarias
 
@@ -1048,11 +1056,20 @@ var service_registry = new ApplicationServiceRegistry();
 // ✅ CORRECTO
 public static final String ENVIRONMENTS_PATH = "/config/";
 public static final int MAX_RETRY_ATTEMPTS = 3;
+public static final String ERROR_MESSAGE = "Error processing request";
 
 // ❌ INCORRECTO
 public static final String environmentsPath = "/config/";
 public static final int maxRetry = 3;
+
+// ❌ INCORRECTO - String literal en código
+logger.error("Error processing request");
+
+// ✅ CORRECTO - Usar constante
+logger.error(ERROR_MESSAGE);
 ```
+
+**REGLA CRÍTICA**: **TODOS los strings deben ser constantes** - NO usar strings literales en el código
 
 ### 2. Organización de Imports
 
@@ -1084,7 +1101,6 @@ import com.sura.mi.reportes.vidagrupo.infrastructure.common.config.ApplicationSe
 
 ```java
 public class MicrointegratorMain {
-    
     // 1. Constantes
     private static final String DEFAULT_CONFIG = "/config";
     
@@ -1110,6 +1126,8 @@ public class MicrointegratorMain {
 }
 ```
 
+**REGLA CRÍTICA**: **NO dejar línea en blanco** después de la declaración de clase
+
 ### 4. Uso de Var (Java 10+)
 
 ```java
@@ -1126,13 +1144,20 @@ var data = getData();    // ¿Qué tipo es data?
 ### 5. Manejo de Excepciones
 
 ```java
-// ✅ CORRECTO
+// ✅ CORRECTO - Usar constante para mensaje
 private DataSource configureDatabase(CamelContext camelContext) {
     try {
         return OracleDataSourceProvider.createOracleDataSource(camelContext);
     } catch (Exception e) {
-        throw new DatabaseConfigurationException(DATABASE_ERROR_MESSAGE, e);
+        throw new DatabaseConfigurationException(ErrorMessages.DATABASE_CONFIG_ERROR, e);
     }
+}
+
+// ❌ INCORRECTO - String literal en excepción
+try {
+    return createDataSource();
+} catch (Exception e) {
+    throw new DatabaseConfigurationException("Error configurando BD", e);
 }
 
 // ❌ INCORRECTO - Capturar y no hacer nada
@@ -1141,14 +1166,9 @@ try {
 } catch (Exception e) {
     // silenciar excepción
 }
-
-// ❌ INCORRECTO - Catch genérico sin contexto
-try {
-    configureDatabase();
-} catch (Exception e) {
-    throw new RuntimeException(e);
-}
 ```
+
+**REGLA**: Usar **constantes** para mensajes de error, no strings literales
 
 ### 6. Lombok
 
@@ -1178,17 +1198,32 @@ public class ReportRequest {
 ```java
 // ✅ CORRECTO - Routes organizadas, nombres descriptivos
 public class GenerateDetailChargeRoute extends RouteBuilder {
+    private static final String ROUTE_ID = "generate-detail-charge-route";
+    private static final String LOG_PROCESSING = "Processing detail charge generation";
+    private static final String LOG_SUCCESS = "Detail charge generated successfully";
     
     @Override
     public void configure() throws Exception {
         from("direct:generateDetailCharge")
-            .routeId("generate-detail-charge-route")
-            .log("Processing detail charge generation")
+            .routeId(ROUTE_ID)
+            .log(LOG_PROCESSING)
             .to("bean:detailChargeService?method=generate")
-            .log("Detail charge generated successfully");
+            .log(LOG_SUCCESS);
+    }
+}
+
+// ❌ INCORRECTO - Strings literales
+public class GenerateDetailChargeRoute extends RouteBuilder {
+    @Override
+    public void configure() throws Exception {
+        from("direct:generateDetailCharge")
+            .routeId("generate-detail-charge-route")  // String literal
+            .log("Processing...");  // String literal
     }
 }
 ```
+
+**REGLA**: Declarar todos los strings como **constantes** en la clase
 
 ### 8. Inyección de Dependencias
 
@@ -1220,7 +1255,6 @@ import static com.sura.constant.AppConstant.PATH;
 import org.apache.camel.main.Main;
 
 public class MicrointegratorMain {
-    
     public static void main(String... args) throws Exception {
         var main = new Main();
         main.run();
@@ -1228,6 +1262,11 @@ public class MicrointegratorMain {
 }
 // FIN (sin líneas vacías)
 ```
+
+**REGLAS OBLIGATORIAS**:
+- **NO línea en blanco** después de la declaración de clase
+- **NO líneas vacías** al inicio del archivo
+- **NO líneas vacías** al final del archivo
 
 ---
 
@@ -1302,29 +1341,34 @@ jacocoTestReport {
 
 ### Guidewire - Gosu
 
-1. **Usar Enhancements** para agregar funcionalidad a entidades
-2. **DisplayKeys** siempre con prefijo `Sura.`
-3. **Query Builder** para todas las consultas a BD
-4. **GX Model** para integraciones XML
-5. **Gson** para integraciones JSON
-6. **No usar variables estáticas mutables**
-7. **Templates de Gosu** para concatenación de strings
-8. **Validar nulos** antes de acceder propiedades
-9. **Filtrar en BD**, no en código
-10. **Plugins en scope estático** o application
+1. **NO usar comentarios** de documentación - código autoexplicativo
+2. **NO usar strings literales** - declarar en constantes/DisplayKeys
+3. **Usar Enhancements** para agregar funcionalidad a entidades
+4. **DisplayKeys** siempre con prefijo `Sura.` para mensajes al usuario
+5. **Query Builder** para todas las consultas a BD
+6. **GX Model** para integraciones XML
+7. **Gson** para integraciones JSON
+8. **No usar variables estáticas mutables**
+9. **Templates de Gosu** para concatenación de strings
+10. **Validar nulos** antes de acceder propiedades
+11. **Filtrar en BD**, no en código
+12. **Plugins en scope estático** o application
 
 ### Java - Apache Camel
 
-1. **Usar var** cuando el tipo sea obvio
-2. **Lombok** para reducir boilerplate
-3. **Constructor injection** para dependencias
-4. **Importaciones estáticas** para constantes
-5. **Excepciones específicas** con contexto
-6. **Routes descriptivas** con routeId
-7. **Logging apropiado** en cada paso
-8. **Properties externalizadas** en archivos de configuración
-9. **DataSource en scope** de aplicación
-10. **Tests con cobertura > 80%**
+1. **NO usar comentarios** de documentación - código autoexplicativo
+2. **NO usar strings literales** - declarar todas las constantes
+3. **Sin línea en blanco** después de declaración de clase
+4. **Usar var** cuando el tipo sea obvio
+5. **Lombok** para reducir boilerplate
+6. **Constructor injection** para dependencias
+7. **Importaciones estáticas** para constantes
+8. **Excepciones específicas** con mensajes en constantes
+9. **Routes descriptivas** con routeId en constante
+10. **Logging apropiado** con mensajes en constantes
+11. **Properties externalizadas** en archivos de configuración
+12. **DataSource en scope** de aplicación
+13. **Tests con cobertura > 80%**
 
 ### Seguridad
 
@@ -1410,9 +1454,11 @@ jacocoTestReport {
 
 - [ ] Código en inglés, comentarios en español
 - [ ] Sin código comentado
+- [ ] Sin comentarios de documentación (código autoexplicativo)
 - [ ] Sin líneas vacías al inicio/final de archivos
+- [ ] Sin strings literales (usar constantes/DisplayKeys)
 - [ ] Nomenclatura correcta (paquetes, clases, métodos, variables)
-- [ ] DisplayKeys con prefijo `Sura.`
+- [ ] DisplayKeys con prefijo `Sura.` para mensajes al usuario
 - [ ] Enhancements terminan en `_Ext`
 - [ ] Sin variables públicas (usar propiedades)
 - [ ] Sin variables estáticas mutables
@@ -1428,7 +1474,10 @@ jacocoTestReport {
 
 - [ ] Código en inglés, comentarios en español
 - [ ] Sin código comentado
+- [ ] Sin comentarios de documentación (código autoexplicativo)
 - [ ] Sin líneas vacías al inicio/final de archivos
+- [ ] Sin línea en blanco después de declaración de clase
+- [ ] Sin strings literales (usar constantes)
 - [ ] Importaciones estáticas para constantes
 - [ ] Imports organizados correctamente
 - [ ] Uso apropiado de `var`
