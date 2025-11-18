@@ -6,7 +6,7 @@
 
 El MicroIntegradorReportesVidaGrupo es un microservicio especializado construido sobre Apache Camel que se encarga de **generar reportes masivos para pólizas de Vida Grupo**. Actualmente implementa la generación de **reportes detallados de cobro** para facturas colectivas, pero está diseñado con una **arquitectura extensible** que permite agregar nuevos tipos de reportes en el futuro sin afectar la funcionalidad existente.
 
-El componente gestiona la construcción asíncrona de archivos de reporte que pueden contener desde miles hasta millones de registros, utilizando un patrón de work queues programadas para procesar grandes volúmenes de datos de forma eficiente.
+El componente gestiona la construcción asíncrona de archivos de reporte que pueden contener desde miles hasta millones de registros, utilizando el **Scheduled Job Pattern con Quartz Scheduler** para procesar grandes volúmenes de datos de forma eficiente mediante jobs programados.
 
 **Visión de Extensibilidad:**
 - 📊 **Actual**: Reporte de detalle de cobro (`detailcharge`)
@@ -14,24 +14,38 @@ El componente gestiona la construcción asíncrona de archivos de reporte que pu
 
 ### Contexto de Negocio
 
-Dentro del ecosistema de Seguros Sura - Vida Grupo, este microservicio sirve como puente crítico entre **BillingCenter** y la infraestructura de generación de archivos en **Azure (Massive Download API)**. Los reportes de detalle de cobro son documentos esenciales que contienen información granular de cada asegurado dentro de una factura colectiva, incluyendo coberturas, primas, valores asegurados y demás información regulatoria necesaria para clientes corporativos.
+Dentro del ecosistema de Seguros Sura - Vida Grupo, este microservicio sirve como **puente crítico end-to-end** entre:
 
-Los productos soportados son:
+1. **BillingCenter (Initiation)**: Usuario de negocio inicia solicitud vía UI → llamada REST síncrona al microservicio
+2. **MicroIntegrador (Orchestration)**: Registra solicitud y delega procesamiento asíncrono a 4 jobs programados (WorkQueues)
+3. **Azure Massive Download API (Storage)**: Construcción incremental de archivos masivos sin bloquear BillingCenter
+4. **BillingCenter (Consumption)**: Descarga archivo finalizado cuando usuario consulta nuevamente
+
+Los reportes de detalle de cobro son documentos esenciales que contienen información granular de cada asegurado dentro de una factura colectiva o devolución, incluyendo coberturas, primas, valores asegurados y demás información regulatoria necesaria para clientes corporativos.
+
+**Productos Soportados:**
 - **Vida Grupo Integral**
 - **Deudores**
 - **Docentes**  
 - **Condiciones de Uso**
 
+**Puntos de Entrada desde BillingCenter:**
+- Pantalla "Facturas Colectivas" (botón "Generar detalle de cobro")
+- Pantalla "Devoluciones de Pólizas Colectivas" (botón "Generar detalle de cobro")
+- Generación automática nocturna vía batch job
+
 ### Responsabilidades Principales
 
-- **Generación de Reportes Masivos**: Motor extensible para construcción de diferentes tipos de reportes mediante procesamiento asíncrono
-- **Detalle de Cobro (Implementado)**: Generar reportes detallados de cobro para facturas colectivas mediante work queues distribuidas
-- **Gestión de Volúmenes Masivos**: Procesar eficientemente reportes con millones de registros utilizando insert-select optimizados
-- **Integración con Azure Massive Download**: Comunicarse con la API de Azure para envío de bloques, cabeceras y cierre de archivos
-- **Consulta de Estado**: Proporcionar endpoints REST para solicitar generación y consultar estado/descarga de reportes
-- **Persistencia y Limpieza**: Mantener tablas de control de generación de reportes y limpieza automática de registros antiguos
-- **Mensajería Asíncrona**: Notificar cambios de estado a aplicaciones externas vía RabbitMQ
-- **Extensibilidad Futura**: Arquitectura preparada para agregar nuevos tipos de reportes sin modificar código existente
+- **API REST Síncrona**: Exponer endpoints REST para consulta (GET) y generación (POST) de reportes desde BillingCenter y aplicaciones externas
+- **Procesamiento Asíncrono Programado**: Ejecutar 4 jobs programados (WorkQueues) mediante Quartz Scheduler para construcción incremental de reportes
+- **Detalle de Cobro (Implementado)**: Generar reportes detallados de cobro para facturas/devoluciones colectivas mediante procesamiento batch
+- **Consulta Masiva con CTEs**: Ejecutar INSERT SELECT de alto rendimiento con estrategia de CTEs, pre-filtrado y paralelización (script_bc_pc.sql)
+- **Gestión de Volúmenes Masivos**: Procesar eficientemente reportes con millones de registros (facturas con 50,000+ asegurados)
+- **Integración con Azure Massive Download**: Orquestar creación de cabecera, envío de bloques (batch configurable) y cierre de archivos
+- **Integración con Guidewire**: Consultar datos de BillingCenter y PolicyCenter desde réplica centralizada (LABGWDWH)
+- **Persistencia y Limpieza**: Mantener tablas de control con estados transaccionales y limpieza automática (WorkQueue 4 diaria)
+- **Mensajería Asíncrona**: Notificar cambios de estado a aplicaciones externas (AVA, PorChat) vía RabbitMQ (no a BillingCenter)
+- **Extensibilidad Modular**: Arquitectura hexagonal preparada para agregar nuevos tipos de reportes como módulos independientes
 
 ### Ubicación
 
@@ -86,7 +100,7 @@ El componente implementa una arquitectura basada en **patrones empresariales de 
 - **CQRS (Command Query Responsibility Segregation)**
   - Separación clara de Commands (escritura) y Queries (lectura) en capa de aplicación
   - Ports separados por responsabilidad: `command/` y `query/` en capa de dominio
-  - Optimización independiente de operaciones de lectura vs escritura
+  - Operaciones de lectura y escritura manejadas de forma independiente
 
 - **Repository Pattern**
   - Abstracción del acceso a datos mediante interfaces (ports) en Domain
@@ -104,7 +118,7 @@ El componente implementa una arquitectura basada en **patrones empresariales de 
 - **Batch Processing Pattern**
   - Procesamiento por lotes de grandes volúmenes (miles a millones de registros)
   - WorkQueue 2 divide el procesamiento en bloques configurables
-  - Optimización de memoria y throughput mediante paginación
+  - Gestión de memoria y throughput mediante paginación
 
 - **Competing Consumers Pattern**
   - Múltiples WorkQueues procesando independientemente según estado
@@ -129,7 +143,7 @@ El componente implementa una arquitectura basada en **patrones empresariales de 
 
 **Justificación de la Arquitectura**: 
 
-La combinación de **Scheduled Job Pattern** (Quartz) con **Batch Processing** permite gestionar el procesamiento masivo de datos sin afectar el rendimiento del sistema, ejecutando trabajos en momentos específicos con volúmenes controlados. La **arquitectura hexagonal** estricta con **diseño modular** facilita testing (85%+ cobertura), mantenibilidad a largo plazo y **extensibilidad** para agregar nuevos tipos de reportes sin modificar código existente. El uso de **CQRS** optimiza las operaciones de lectura y escritura de forma independiente, mientras que **EDA** permite desacoplamiento total entre el microservicio y sus consumidores.
+La combinación de **Scheduled Job Pattern** (Quartz) con **Batch Processing** permite gestionar el procesamiento masivo de datos sin afectar el rendimiento del sistema, ejecutando trabajos en momentos específicos con volúmenes controlados. La **arquitectura hexagonal** estricta con **diseño modular** facilita testing (85%+ cobertura), mantenibilidad a largo plazo y **extensibilidad** para agregar nuevos tipos de reportes sin modificar código existente. El uso de **CQRS** separa las operaciones de lectura y escritura de forma independiente, mientras que **EDA** permite desacoplamiento total entre el microservicio y sus consumidores.
 
 ### Estructura del Código
 
@@ -263,6 +277,90 @@ Cuando se requiera agregar un nuevo tipo de reporte (ej: `claimreport`, `renewal
 4. **Tests**: Replicar estructura en `test/` para el nuevo módulo
 5. **Sin impacto**: El módulo `detailcharge` existente NO se modifica
 6. **Reutilización**: Usar elementos de `common/` cuando aplique
+
+### Consulta Masiva INSERT SELECT (WorkQueue 1)
+
+**Ubicación**: `src/main/resources/sql/script_bc_pc.sql` (473 líneas)
+
+El **WorkQueue 1** ejecuta la consulta masiva más crítica del flujo: un **INSERT SELECT** que extrae datos de BillingCenter y PolicyCenter (esquemas ADM_GWBC y ADM_GWPC en réplica LABGWDWH) y los carga en la tabla de detalle (`detail_charge_items`). Esta operación puede procesar **desde miles hasta millones de registros** dependiendo del tamaño de la factura colectiva.
+
+#### Estrategia de Diseño con CTEs
+
+La consulta está diseñada con una **estrategia de CTEs (Common Table Expressions)** para máximo rendimiento mediante:
+
+**1. Parametrización Centralizada (CTE: `params`)**
+- Define el `invoice_number` una sola vez como parámetro de entrada
+- Reutilización en todos los CTEs subsecuentes
+
+**2. Pre-filtrado y Materialización (CTEs: `filtered_disbursinv`, `filtered_invcollpolicy`)**
+- Filtra las tablas principales de facturación por `invoice_number` **antes** de cualquier join
+- Hint `MATERIALIZE` fuerza a Oracle a guardar los resultados intermedios
+- Evita escaneos completos de tablas masivas en joins subsecuentes
+
+**3. Recolección de Llaves (CTE: `relevant_keys`) - Componente Central**
+- **Propósito**: Identificar el conjunto **exacto** de IDs relevantes (INVOICEID, DISBURSEMENT_EXT, job_number_ext) antes de realizar cálculos pesados
+- **Estrategia**: Explora las 4 ramas de datos posibles (DISBURSINV + Desembolsos/Facturas, INVCOLLPOLICY + Desembolsos/Facturas) mediante UNION
+- Los cálculos de impuestos y búsquedas en PolicyCenter solo procesan llaves relevantes (no toda la BD)
+
+**4. Extracción de Llaves Únicas (CTEs: `distinct_invoice_keys`, `distinct_disbursement_keys`, `distinct_job_keys`)**
+- Obtiene listas únicas de llaves encontradas en `relevant_keys`
+- Usadas como filtros pre-aplicados en cálculos subsecuentes
+
+**5. Cálculos Pre-filtrados (CTEs: `invoice_taxes`, `disbursement_taxes`, `policycenter_data`)**
+- **Cálculo de Impuestos**: Se ejecuta ÚNICAMENTE sobre IDs relevantes (join con `distinct_invoice_keys` y `distinct_disbursement_keys`)
+- **Datos de PolicyCenter**: Se consulta ÚNICAMENTE para `job_number_ext` relevantes (join con `distinct_job_keys`)
+- Evita cálculos costosos sobre millones de registros irrelevantes
+
+**6. Ensamblaje Principal (CTE: `billing_data_base`)**
+- Replica las 4 ramas de `relevant_keys` pero ahora para extraer el conjunto completo de datos
+- Se une con CTEs pre-filtrados y pre-calculados (operaciones baratas gracias a materialización)
+- Uso de hints `PARALLEL(8)` para procesamiento paralelo
+
+**7. Cálculo de Vigencias con Funciones de Ventana (CTE: `billing_data_with_windows`)**
+- Usa `LEAD` y `LAG` para calcular la fecha de fin de vigencia correcta
+- Lógica compleja ejecutada sobre datos ya filtrados
+
+**8. Inserción Paralela Final (INSERT + SELECT)**
+- Hints `ENABLE_PARALLEL_DML`, `APPEND`, `PARALLEL(8)` para inserción directa de alto rendimiento (direct-path insert)
+- Join final con tablas dimensionales (`risk_class`, `offering_type`, `contact_details`) y `policycenter_data`
+
+#### Métricas de Rendimiento
+
+| Escenario                          | Registros     | Tiempo Estimado | Características                                   |
+| ---------------------------------- | ------------- | --------------- | ------------------------------------------------- |
+| Factura pequeña                    | 100-1,000     | < 10 segundos   | Procesamiento rápido                              |
+| Factura mediana                    | 1,000-10,000  | 30-60 segundos  | CTEs y pre-filtrado activos                       |
+| Factura grande                     | 10,000-50,000 | 2-4 minutos     | Procesamiento paralelo activo                     |
+| Factura masiva                     | 50,000+       | 5-10 minutos    | Requiere timeout extendido (oracle.jdbc.queryTimeout=600) |
+
+#### Diagrama de Flujo del INSERT SELECT
+
+```
+Parámetro: invoice_number
+        ↓
+[CTE 1: params] ← Define parámetro centralizado
+        ↓
+[CTE 2: filtered_disbursinv, filtered_invcollpolicy] ← Pre-filtrado MATERIALIZE
+        ↓
+[CTE 3: relevant_keys] ← CEREBRO: Encuentra IDs exactos (4 ramas UNION)
+        ↓
+[CTE 4: distinct_*_keys] ← Extrae llaves únicas
+        ↓
+[CTE 5: invoice_taxes, disbursement_taxes, policycenter_data] ← Cálculos pre-filtrados
+        ↓
+[CTE 6: billing_data_base] ← Ensamblaje completo (4 ramas UNION ALL PARALLEL(8))
+        ↓
+[CTE 7: billing_data_with_windows] ← LEAD/LAG para vigencias
+        ↓
+[INSERT FINAL] ← Direct-path insert PARALLEL(8) + Join con dimensionales
+        ↓
+detail_charge_items (tabla de destino)
+```
+
+**Archivos Relacionados:**
+- **Script SQL**: `MicroIntegradorReportesVidaGrupo/src/main/resources/sql/script_bc_pc.sql`
+- **Ejecutor**: `WorkQueue1Processor.java` (invoca el script como PreparedStatement)
+- **Documentación del Flujo**: `docs/architecture/flujo-generacion-reporte-detalle-cobro.md` (sección WorkQueue 1)
 
 ### Diagrama Conceptual
 
@@ -677,8 +775,13 @@ El componente expone **2 endpoints REST** a través de Apache Camel Netty HTTP p
 
 #### Servicios Externos
 
+- **BillingCenter (Guidewire)**: Sistema core de facturación que inicia el flujo de generación de reportes
+  - **Integración**: Usuario hace click en botón "Generar detalle de cobro" → Llamada REST al MicroIntegrador
+  - **Criticidad**: 🟡 Importante (el flujo puede iniciarse manualmente vía API REST directa)
+
 - **Azure Massive Download API**: API de Microsoft Azure para generación y almacenamiento de archivos masivos. Se utiliza para enviar bloques de datos, cerrar archivos y consultar disponibilidad.
   - **Base URL**: `https://labapicorevidagrupo.suramericana.com/massive-download`
+  - **Operaciones**: POST /create-header, POST /upload-content, POST /close-file, GET /download-url
   - **Criticidad**: 🔴 Crítica (sin este servicio no se pueden generar reportes)
   
 - **Splunk (Holmes Lab)**: Plataforma de observabilidad para centralización de logs
@@ -689,8 +792,23 @@ El componente expone **2 endpoints REST** a través de Apache Camel Netty HTTP p
 
 #### Componentes del Sistema
 
-- **BillingCenter (Guidewire)**: Sistema core de facturación. Se consulta su base de datos Oracle para obtener información de facturas colectivas, items de factura, coberturas y períodos.
-- **PolicyCenter (Guidewire)**: Sistema core de pólizas. Se consulta su base de datos Oracle para obtener información de asegurados, pólizas maestras, productos y condiciones.
+- **BillingCenter (Guidewire)**: Sistema core de facturación
+  - **Rol Iniciador**: Usuario ejecuta acción en UI (click en botón "Generar detalle de cobro") → Invoca REST API del MicroIntegrador
+  - **Rol Fuente de Datos**: Se consulta su base de datos Oracle (esquema ADM_GWBC en réplica LABGWDWH) para obtener información de:
+    - Facturas colectivas y devoluciones (`BCX_DISBURSINVCOLLECTIVE_EXT`, `BCX_INVOICECOLLECTIVEPOLICY`)
+    - Items de factura y cargos (`BC_INVOICE`, `BC_INVOICEITEM`, `BC_CHARGE`)
+    - Desembolsos (`BC_DISBURSEMENT`, `BC_BASENONRECDISTITEM`)
+    - Impuestos (`BC_CHARGEPATTERN` con CATEGORY=2)
+    - Períodos de póliza y contactos (`BC_POLICYPERIOD`, `BC_CONTACT`)
+  - Consulta masiva mediante INSERT SELECT con CTEs en `script_bc_pc.sql` (473 líneas)
+
+- **PolicyCenter (Guidewire)**: Sistema core de pólizas
+  - **Rol Fuente de Datos**: Se consulta su base de datos Oracle (esquema ADM_GWPC en réplica LABGWDWH) para obtener información de:
+    - Asegurados y contactos (`PC_CONTACT`, `PC_ACCOUNTCONTACT`)
+    - Pólizas maestras y riesgos (`PC_POLICY`, `PC_POLICYPERIOD`)
+    - Roles de contacto y relaciones (`PC_POLICYCONTACTROLE`, `PCTL_RELATIONSHIPTYPE_EXT`)
+    - Tipos de operación (`PCTL_JOB` - Emisión, Renovación, etc.)
+  - Pre-filtrado con `distinct_job_keys` para consultar solo job_numbers relevantes
 
 #### Bases de Datos
 
@@ -1072,38 +1190,7 @@ curl http://<service-url>:9000/actuator/health
 
 | Fecha      | Versión | Cambios                                                                  | Autor             |
 | ---------- | ------- | ------------------------------------------------------------------------ | ----------------- |
-| 2025-11-10 | 1.1     | Actualización: reestructuración hexagonal y cobertura 85%+               | Arquitecto Ceiba  |
-| 2025-10-30 | 1.0     | Documentación inicial del componente                                     | Arquitecto Ceiba  |
-
-### Changelog v1.1 (2025-11-10)
-
-**Mejoras de Calidad:**
-- ✅ Agregadas 124+ pruebas unitarias
-- ✅ Cobertura de código incrementada a 85%+
-- ✅ Configuración de Jacoco para reportes de cobertura
-- ✅ Mutation testing con PIT configurado
-
-**Reestructuración Arquitectónica:**
-- ✅ Reorganización completa de paquetes respetando arquitectura hexagonal
-- ✅ Separación estricta en 3 capas: Application, Domain, Infrastructure
-- ✅ Implementación de CQRS en capa de aplicación (Commands/Queries)
-- ✅ Separación de ports por responsabilidad (command/query)
-- ✅ Mejora en la mantenibilidad y testabilidad del código
-- ✅ **Diseño modular por tipo de reporte** (`detailcharge` como primer módulo)
-- ✅ **Arquitectura extensible** preparada para agregar nuevos tipos de reportes sin modificar código existente
-
-**Estructura de Paquetes:**
-- `application/detailcharge/{command,query,workqueue}` - Casos de uso organizados
-- `domain/detailcharge/{dto,enums,model,ports,provider,service,util}` - Dominio puro
-- `infrastructure/detailcharge/{adapter,route}` - Detalles de implementación
-- `*/common/` - Elementos compartidos entre módulos
-- **Espacios reservados** para futuros módulos (`claimreport`, `renewalreport`, etc.)
-
-**Visión de Extensibilidad:**
-- El microservicio está diseñado como **plataforma de reportes** (no solo detalle de cobro)
-- Cada tipo de reporte futuro será un **módulo independiente** con sus propias 3 capas
-- Principio **Open/Closed**: Abierto para extensión, cerrado para modificación
-- Nuevos reportes se agregan **sin tocar código existente**
+| 2025-11-18 | 1.0     | Documentación del componente MicroIntegradorReportesVidaGrupo            | Arquitecto Ceiba  |
 
 ---
 

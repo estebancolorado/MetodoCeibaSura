@@ -1383,6 +1383,371 @@ sequenceDiagram
 
 ---
 
+## 🔄 **Diagramas de Flujo Detallados por WorkQueue**
+
+### WorkQueue 1: Creación de Cabecera y Carga de Datos
+
+**Programación**: Cada hora (`cron=0 0 * * * ?`)  
+**Clase**: `WorkQueueOneRoute.java`  
+**Procesadores principales**: `UpdateLockAndStatusProcessor`, `SearchAndPopulateInvoiceDataProcessor`
+
+```mermaid
+flowchart TD
+    Start([Quartz Scheduler<br/>Cada hora: 0 0 * * * ?]) --> A[UpdateLockAndStatusProcessor]
+    A --> B{¿Hay registros<br/>pendientes?}
+    
+    B -->|No| End1([Fin - Sin trabajo])
+    
+    B -->|Sí| C[Obtener lista de IDs pendientes<br/>estado=1, lock=0]
+    C --> D[Actualizar a estado=2, lock=1<br/>para evitar concurrencia]
+    
+    D --> LoopStart{Para cada ID}
+    
+    LoopStart --> E[GenerateRequestProcessor:<br/>Construir request para Azure]
+    E --> F[ConsumeMassiveHeadTitleProcessor:<br/>Preparar llamada POST]
+    
+    F --> G[POST Azure API:<br/>/create-header]
+    G --> H{Respuesta<br/>Azure?}
+    
+    H -->|200/201 OK| I[ResponseHeadTitleProcessor:<br/>Extraer headerID de response]
+    I --> J[SearchAndPopulateInvoiceDataProcessor:<br/>Ejecutar INSERT SELECT masivo]
+    
+    J --> K[Consulta a Oracle Guidewire Replica<br/>BC_OWNER + PC_OWNER schemas]
+    K --> L{¿Consulta<br/>exitosa?}
+    
+    L -->|Sí| M[Actualizar estado=3<br/>Guardar headerID<br/>Liberar lock=0]
+    M --> LoopEnd{¿Más IDs?}
+    
+    L -->|No - SQL Error| N[Actualizar estado=ERROR<br/>Liberar lock=0<br/>Log exception]
+    N --> LoopEnd
+    
+    H -->|500/Error| O[ResponseHeadTitleProcessor:<br/>Detectar error HTTP]
+    O --> P[Actualizar estado=ERROR<br/>Liberar lock=0]
+    P --> LoopEnd
+    
+    LoopEnd -->|Sí| LoopStart
+    LoopEnd -->|No| End2([Fin - Procesamiento completo])
+    
+    style Start fill:#e1f5ff
+    style End1 fill:#d4edda
+    style End2 fill:#d4edda
+    style N fill:#f8d7da
+    style P fill:#f8d7da
+    style K fill:#fff3cd
+    style G fill:#cce5ff
+```
+
+**Estados involucrados**:
+- **Entrada**: estado=1, lock=0
+- **Procesando**: estado=2, lock=1
+- **Éxito**: estado=3, lock=0, headerID guardado
+- **Error**: estado=ERROR, lock=0
+
+---
+
+### WorkQueue 2.1: Actualización de Lock (Sub-proceso Horario)
+
+**Programación**: Cada hora (`cron=0 0 * * * ?`)  
+**Clase**: `WorkQueueTwoRoute.java` - Job 1  
+**Procesador principal**: `UpdateLockAndStatusItemsProcessor`
+
+```mermaid
+flowchart TD
+    Start1([Quartz Scheduler<br/>Cada hora: 0 0 * * * ?]) --> A1[UpdateLockAndStatusItemsProcessor]
+    
+    A1 --> B1[Buscar registros en 'items'<br/>con enviado=false]
+    
+    B1 --> C1{¿Hay items<br/>sin enviar?}
+    
+    C1 -->|No| End1([Fin - Sin trabajo])
+    
+    C1 -->|Sí| D1[Actualizar lock en items<br/>para procesamiento]
+    
+    D1 --> E1[Log: Items actualizados<br/>para WorkQueue 2.2]
+    
+    E1 --> End2([Fin - Lock actualizado])
+    
+    style Start1 fill:#e1f5ff
+    style End1 fill:#d4edda
+    style End2 fill:#d4edda
+```
+
+---
+
+### WorkQueue 2.2: Envío de Contenido a Azure (Sub-proceso cada hora + 1 minuto)
+
+**Programación**: Cada hora a los minutos 1 (`cron=0 1 * * * ?`)  
+**Clase**: `WorkQueueTwoRoute.java` - Job 2  
+**Procesadores principales**: `ObtainDetailChargeItemProcessor`, `CompleteDetailChargeItemProcessor`, `BuildContentForParamsProcessor`, `ConsumeMassiveContentProcessor`
+
+```mermaid
+flowchart TD
+    Start([Quartz Scheduler<br/>Cada hora: 0 1 * * * ?]) --> A[ObtainDetailChargeItemProcessor]
+    
+    A --> B[Consultar items pendientes<br/>enviado=false, agrupados por principal_id]
+    
+    B --> C{¿Hay items<br/>para enviar?}
+    
+    C -->|No| End1([Fin - Sin trabajo])
+    
+    C -->|Sí| D[Agrupar por principal_id<br/>y productCode]
+    
+    D --> LoopPrincipal{Para cada<br/>principal_id}
+    
+    LoopPrincipal --> E[CompleteDetailChargeItemProcessor:<br/>Obtener items del principal]
+    
+    E --> F[BuildContentForParamsProcessor:<br/>Construir contenido CSV/TXT]
+    
+    F --> G[Dividir en bloques de 2000 registros<br/>batchSize configurable]
+    
+    G --> LoopBloques{Para cada bloque}
+    
+    LoopBloques --> H[GenerateRequestParamsProcessor:<br/>Construir request con headerID]
+    
+    H --> I[ConsumeMassiveContentProcessor:<br/>Preparar llamada POST]
+    
+    I --> J[POST Azure API:<br/>/upload-content]
+    
+    J --> K{Respuesta<br/>Azure?}
+    
+    K -->|200 OK| L[ResponseConsumeMassiveContentProcessor:<br/>Marcar items como enviado=true]
+    
+    L --> M[Actualizar items en BD:<br/>enviado=true para bloque actual]
+    
+    M --> LoopBloques
+    
+    K -->|500/Error| N[Log error HTTP<br/>NO marcar como enviado]
+    N --> LoopBloques
+    
+    LoopBloques -->|Más bloques| LoopBloques
+    LoopBloques -->|Bloques terminados| O{¿Todos los items<br/>enviados?}
+    
+    O -->|Sí| P[Actualizar principal:<br/>estado=4 Bloques enviados]
+    O -->|No| Q[Log: Bloques parciales enviados]
+    
+    P --> LoopPrincipal
+    Q --> LoopPrincipal
+    
+    LoopPrincipal -->|Más principal_id| LoopPrincipal
+    LoopPrincipal -->|Terminado| End2([Fin - Envío completo])
+    
+    style Start fill:#e1f5ff
+    style End1 fill:#d4edda
+    style End2 fill:#d4edda
+    style N fill:#f8d7da
+    style J fill:#cce5ff
+    style G fill:#fff3cd
+```
+
+**Configuración importante**:
+- **batchSize**: 2000 registros por bloque (configurable en application.yml)
+- **Procesamiento paralelo**: Los bloques se envían en paralelo usando Apache Camel `parallelProcessing()`
+- **Idempotencia**: Items marcados con `enviado=true` no se reprocesarán
+
+**Estados involucrados**:
+- **Entrada**: principal con estado=3, items con enviado=false
+- **Procesando**: Envío de bloques a Azure
+- **Éxito**: principal estado=4, items enviado=true
+- **Parcial**: Algunos bloques enviados, otros pendientes
+
+---
+
+### WorkQueue 3: Cierre de Archivo y Notificación RabbitMQ
+
+**Programación**: Cada hora (`cron=0 0 * * * ?`)  
+**Clase**: `WorkQueueThreeRoute.java`  
+**Procesadores principales**: `ObtainDetailChargePrincipalProcessor`, `ConsumeMassiveEndProcessor`, `ConsumeRabbitEndProcessor`
+
+```mermaid
+flowchart TD
+    Start([Quartz Scheduler<br/>Cada hora: 0 0 * * * ?]) --> A[ObtainDetailChargePrincipalProcessor]
+    
+    A --> B[Consultar registros listos para cerrar<br/>estado=4, lock=0]
+    
+    B --> C{¿Hay archivos<br/>para cerrar?}
+    
+    C -->|No| LogNo[Log: No principal items to close]
+    LogNo --> End1([Fin - Sin trabajo])
+    
+    C -->|Sí| LogSi[Log: Found principal items]
+    LogSi --> D[Convertir lista a Stream<br/>para procesamiento paralelo]
+    
+    D --> LoopStart{Para cada<br/>principal_id<br/>en paralelo}
+    
+    LoopStart --> E[GenerateRequestCloseProcessor:<br/>Construir request con headerID]
+    
+    E --> F[ConsumeMassiveCloseProcessor:<br/>Preparar POST /close-file]
+    
+    F --> G[POST Azure API:<br/>/close-file]
+    
+    G --> H{Respuesta<br/>Close?}
+    
+    H -->|200 OK| I[ResponseCloseProcessor:<br/>Archivo cerrado exitosamente]
+    
+    H -->|500/Error| J[Log error en cierre<br/>Actualizar estado=ERROR]
+    J --> LoopEnd
+    
+    I --> K[GenerateRequestGetProcessor:<br/>Construir request para obtener URL]
+    
+    K --> L[ConsumeMassiveGetProcessor:<br/>Preparar GET /download-url]
+    
+    L --> M[GET Azure API:<br/>/get-archive]
+    
+    M --> N{Respuesta<br/>Get URL?}
+    
+    N -->|200 OK| O[ResponseGetProcessor:<br/>Extraer downloadUrl y expiresAt]
+    
+    O --> P[Actualizar principal:<br/>estado=5, url, expiresAt<br/>Liberar lock=0]
+    
+    P --> Q[ConsumeRabbitEndProcessor:<br/>Construir mensaje para RabbitMQ]
+    
+    Q --> R{RabbitMQ<br/>disponible?}
+    
+    R -->|Sí| S[PUBLISH a RabbitMQ:<br/>exchange: vidagrupo.chargedetail.ex<br/>routingKey: vidagrupo.chargedetail.risk]
+    
+    S --> T{Publicación<br/>exitosa?}
+    
+    T -->|Sí| U[Log: Message published successfully<br/>para AVA y PorChat]
+    U --> LoopEnd
+    
+    T -->|No| V[Log: RabbitMQ publish error<br/>Bean: logError]
+    V --> W[Continuar - No bloquea flujo<br/>Estado=5 ya guardado]
+    W --> LoopEnd
+    
+    R -->|No| X[Log: Rabbit is not available]
+    X --> LoopEnd
+    
+    N -->|404/500| Y[ResponseGetProcessor:<br/>Error al obtener URL]
+    Y --> Z[Actualizar estado=ERROR<br/>Liberar lock=0]
+    Z --> LoopEnd
+    
+    LoopEnd{¿Más<br/>principal_id?}
+    LoopEnd -->|Sí| LoopStart
+    LoopEnd -->|No| End2([Fin - Procesamiento completo])
+    
+    style Start fill:#e1f5ff
+    style End1 fill:#d4edda
+    style End2 fill:#d4edda
+    style J fill:#f8d7da
+    style Z fill:#f8d7da
+    style V fill:#fff3cd
+    style X fill:#fff3cd
+    style S fill:#d1ecf1
+    style G fill:#cce5ff
+    style M fill:#cce5ff
+```
+
+**Consumidores de RabbitMQ**:
+- **AVA** (Asesor Virtual Automático)
+- **PorChat** (Portal de Chat)
+
+**Nota importante**: Si RabbitMQ falla, el flujo continúa. El estado=5 con URL ya está guardado, permitiendo que BillingCenter descargue el archivo incluso sin notificación.
+
+**Estados involucrados**:
+- **Entrada**: estado=4, lock=0
+- **Cerrando**: lock=1 temporal
+- **Éxito**: estado=5, lock=0, url y expiresAt guardados
+- **Error**: estado=ERROR, lock=0
+
+---
+
+### WorkQueue 4: Limpieza de Registros Antiguos
+
+**Programación**: Diariamente a las 22:00 (`cron=0 0 22 * * ?`)  
+**Clase**: `WorkQueueFourRoute.java`  
+**Procesadores principales**: `CleanDetailChargePrincipalProcessor`, `CleanDetailChargeItemsProcessor`
+
+```mermaid
+flowchart TD
+    Start([Quartz Scheduler<br/>Diario: 0 0 22 * * ?<br/>10:00 PM]) --> Log1[Log: WQ4 Route Start]
+    
+    Log1 --> A[CleanPrincipalProcessor]
+    
+    A --> B[Buscar registros antiguos en 'principal'<br/>estado=5 o ERROR<br/>fechaCreacion < NOW - 30 días]
+    
+    B --> C{¿Hay registros<br/>antiguos?}
+    
+    C -->|No| Log2[Log: No old principal records]
+    Log2 --> D
+    
+    C -->|Sí| E[DELETE FROM principal<br/>WHERE conditions]
+    
+    E --> F{¿Eliminación<br/>exitosa?}
+    
+    F -->|Sí| Log3[Log: Cleaning principal complete<br/>X registros eliminados]
+    F -->|No| Retry1[Retry attempt 1/3<br/>Esperar 1000ms]
+    
+    Retry1 --> Retry2{¿Retry<br/>exitoso?}
+    Retry2 -->|No| Retry3[Retry attempt 2/3<br/>Esperar 1000ms]
+    Retry3 --> Retry4{¿Retry<br/>exitoso?}
+    Retry4 -->|No| Retry5[Retry attempt 3/3<br/>Esperar 1000ms]
+    Retry5 --> Retry6{¿Retry<br/>exitoso?}
+    
+    Retry6 -->|No| Error1[Log exception:<br/>Handler exception error]
+    Error1 --> End1([Fin - Error en limpieza])
+    
+    Retry2 -->|Sí| Log3
+    Retry4 -->|Sí| Log3
+    Retry6 -->|Sí| Log3
+    
+    Log3 --> D[CleanItemsProcessor]
+    
+    D --> G[Buscar registros huérfanos en 'items'<br/>Sin FK a 'principal' existente<br/>enviado=true, antiguos]
+    
+    G --> H{¿Hay items<br/>huérfanos?}
+    
+    H -->|No| Log4[Log: No old item records]
+    Log4 --> End2
+    
+    H -->|Sí| I[DELETE FROM items<br/>WHERE principal_id NOT IN principal]
+    
+    I --> J{¿Eliminación<br/>exitosa?}
+    
+    J -->|Sí| Log5[Log: Cleaning items complete<br/>Y registros eliminados]
+    J -->|No| RetryItems1[Retry attempt 1/3<br/>Esperar 1000ms]
+    
+    RetryItems1 --> RetryItems2{¿Retry<br/>exitoso?}
+    RetryItems2 -->|No| RetryItems3[Retry attempt 2/3<br/>Esperar 1000ms]
+    RetryItems3 --> RetryItems4{¿Retry<br/>exitoso?}
+    RetryItems4 -->|No| RetryItems5[Retry attempt 3/3<br/>Esperar 1000ms]
+    RetryItems5 --> RetryItems6{¿Retry<br/>exitoso?}
+    
+    RetryItems6 -->|No| Error2[Log exception:<br/>Handler exception error]
+    Error2 --> End1
+    
+    RetryItems2 -->|Sí| Log5
+    RetryItems4 -->|Sí| Log5
+    RetryItems6 -->|Sí| Log5
+    
+    Log5 --> End2[Log: WQ4 Route Complete]
+    End2 --> End3([Fin - Limpieza exitosa])
+    
+    style Start fill:#e1f5ff
+    style End1 fill:#f8d7da
+    style End3 fill:#d4edda
+    style Error1 fill:#f8d7da
+    style Error2 fill:#f8d7da
+    style Retry1 fill:#fff3cd
+    style Retry3 fill:#fff3cd
+    style Retry5 fill:#fff3cd
+    style RetryItems1 fill:#fff3cd
+    style RetryItems3 fill:#fff3cd
+    style RetryItems5 fill:#fff3cd
+```
+
+**Configuración de reintentos**:
+- **maximumRedeliveries**: 3
+- **redeliveryDelay**: 1000ms (1 segundo)
+- **retryAttemptedLogLevel**: WARN
+
+**Criterios de limpieza**:
+- **Tabla principal**: Registros con estado=5 o ERROR con más de 30 días
+- **Tabla items**: Items enviados (enviado=true) cuyo principal_id ya no existe
+
+**Nota**: Este WorkQueue es crítico para evitar crecimiento infinito de la base de datos. Mantiene solo los registros activos y recientes.
+
+---
+
 ## 📊 **Estados y Transiciones**
 
 ### Diagrama de Estados del Flujo
@@ -2259,8 +2624,30 @@ cd MicroIntegradorReportesVidaGrupo
 ---
 
 _Documentación generada con Método Ceiba - Arquitecto_  
-_Última actualización: 14 de Noviembre, 2025_  
-_Versión: 3.1 - Refinamiento técnico con archivos reales y generación automática nocturna_
+_Última actualización: 18 de Noviembre, 2025_  
+_Versión: 3.2 - Diagramas de flujo detallados por WorkQueue con sub-procesos_
+
+**Cambios en v3.2:**
+- ✅ **NUEVO**: Agregados 5 diagramas de flujo (flowchart) detallados para cada WorkQueue:
+  - **WorkQueue 1**: Flujo completo de creación de cabecera y carga masiva de datos desde Guidewire Replica
+  - **WorkQueue 2.1**: Sub-proceso horario de actualización de locks en items (cron: 0 0 * * * ?)
+  - **WorkQueue 2.2**: Sub-proceso de envío de contenido a Azure por bloques (cron: 0 1 * * * ?)
+  - **WorkQueue 3**: Flujo de cierre de archivo, obtención de URL y publicación a RabbitMQ
+  - **WorkQueue 4**: Flujo de limpieza diaria con reintentos (cron: 0 0 22 * * ?)
+- ✅ **NUEVO**: Documentada la arquitectura real de WorkQueue 2 con dos jobs independientes:
+  - WQ2.1: UpdateLockAndStatusItemsProcessor (cada hora exacta)
+  - WQ2.2: ObtainDetailChargeItemProcessor + envío a Azure (cada hora + 1 minuto)
+- ✅ **DETALLE**: Cada diagrama incluye:
+  - Programación Quartz con expresiones cron reales del código
+  - Nombres de clases Java reales (Processors, Routes)
+  - Decisiones de negocio (¿Hay registros?, ¿Respuesta OK?, etc.)
+  - Manejo de errores y reintentos
+  - Estados de BD involucrados
+  - Logs específicos del código
+- ✅ **CLARIFICACIÓN**: Documentado procesamiento paralelo en WQ2 y WQ3 usando Apache Camel
+- ✅ **CLARIFICACIÓN**: Explicado batchSize de 2000 registros por bloque en WQ2
+- ✅ **CLARIFICACIÓN**: Documentada estrategia de reintentos en WQ4 (3 intentos, 1000ms delay)
+- ✅ Mantenida toda la documentación previa de versiones 3.0 y 3.1
 
 **Cambios en v3.1:**
 - ✅ **CRÍTICO**: Actualizada arquitectura de datos con **Oracle Guidewire Replica (LABGWDWH)** en lugar de bases de datos BC/PC separadas
