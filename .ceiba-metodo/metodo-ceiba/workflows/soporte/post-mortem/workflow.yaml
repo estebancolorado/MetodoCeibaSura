@@ -1,0 +1,81 @@
+name: "Documentar Incidente (Post-Mortem)"
+description: "Documentación post-mortem de incidente resuelto y evaluación para Knowledge Base"
+version: "1.0.0"
+standalone: true
+author: "Método Ceiba"
+tags:
+  - support
+  - post-mortem
+  - documentation
+  - knowledge-base
+
+# Critical variables load from config_source
+config_source: "{project-root}/.ceiba-metodo/metodo-ceiba/config.yaml"
+output_folder: "{config_source}:output_folder"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+document_output_language: "{config_source}:document_output_language"
+date: system-generated
+
+variables:
+  # Variables de entrada (prompt)
+  incident_file:
+    description: "Ruta al archivo del incidente a documentar (ej: docs/incidents/042.incident.md)"
+    required: true
+  incident_id:
+    description: "ID del incidente (ej: 042)"
+    required: true
+  severity:
+    description: "Severidad del incidente (P0, P1, P2, P3, P4)"
+    required: true
+
+  # Variables generadas por el workflow
+  timeline_events:
+    description: "Lista de eventos con timestamps del ciclo de vida del incidente"
+    required: false
+  what_went_wrong:
+    description: "Análisis de fallas y errores cometidos"
+    required: false
+  what_went_right:
+    description: "Aspectos positivos y éxitos del manejo del incidente"
+    required: false
+  lessons_learned:
+    description: "Aprendizajes clave del incidente"
+    required: false
+  preventive_measures:
+    description: "Medidas preventivas implementadas para evitar recurrencia"
+    required: false
+  kb_eligible:
+    description: "Determina si el incidente debe documentarse en Knowledge Base"
+    required: false
+  kb_category:
+    description: "Categoría para Knowledge Base si aplica"
+    required: false
+  kb_tags:
+    description: "Etiquetas para búsqueda en KB"
+    required: false
+
+  # Variables de configuración
+  kb_index_location:
+    description: "Ruta al directorio de índices de Knowledge Base"
+    required: false
+    default: "docs/knowledge-base/"
+  require_post_mortem_p0_p1:
+    description: "Indica si post-mortem es obligatorio para P0-P1"
+    required: false
+    default: true
+
+execution_hints:
+  model: "advanced"
+  temperature: 0.3
+  requires_context: true
+
+paths:
+  instructions: "instructions.md"
+  templates:
+    - "post-mortem-template.md"
+    - "index-by-category-template.md"
+    - "index-by-tags-template.md"
+  checklist: "checklist.md"
+  supporting_docs:
+    - "kb-criteria.md"

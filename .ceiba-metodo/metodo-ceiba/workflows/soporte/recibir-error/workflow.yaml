@@ -1,0 +1,67 @@
+# Recibir Error Workflow - Método Ceiba
+# Recepción y clasificación de errores/incidentes del sistema
+
+name: "recibir-error"
+description: "Recibir y clasificar errores/incidentes del sistema con evidencias técnicas completas. Captura información estructurada para facilitar diagnóstico y resolución."
+author: "Método Ceiba"
+
+# CRÍTICO: Workflow de entrada accesible directamente por usuario
+standalone: true
+
+# Paths - Configuration
+config_source: "{project-root}/src/modules/metodo-ceiba/config.yaml"
+installed_path: "{project-root}/src/modules/metodo-ceiba/workflows/soporte/recibir-error"
+template: "{installed_path}/incident.template.md"
+instructions: "{installed_path}/instructions.md"
+validation: "{installed_path}/checklist.md"
+output_folder: "{config_source}:output_folder"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+document_output_language: "{config_source}:document_output_language"
+date: system-generated
+incidents_location: "{config_source}:incidents_location"
+# Output configuration
+default_output_file: "{output_folder}/incidents/{{incident_number}}.incident.md"
+
+# Variables used in workflow
+variables:
+  # User prompts
+  incident_number: "prompt"
+  environment: "prompt"
+  severity: "prompt"
+  error_type: "prompt"
+  expected_behavior: "prompt"
+  actual_behavior: "prompt"
+  affected_components: "prompt"
+
+  # AI generated
+  incident_title: "generated"
+  error_description: "generated"
+  reproduction_steps: "generated"
+  evidences_section: "generated"
+  technical_context: "generated"
+  failing_values: "generated"
+  impact: "generated"
+
+  # Recategorization variables
+  original_severity: "generated" # Stored in Step 1
+  original_error_type: "generated" # Stored in Step 1
+  proposed_severity: "generated" # Generated in Step 5.1 if recategorization needed
+  proposed_error_type: "generated" # Generated in Step 5.1 if recategorization needed
+  recategorization_applied: "generated" # Flag: true if recategorization was applied
+  recategorization_reason: "generated" # Justification for recategorization
+  recategorization_log: "generated" # Full log entry for incident document
+  categorization_validated: "generated" # Flag: true if no recategorization needed
+
+# Execution mode
+execution_hints:
+  interactive: true # Requiere interacción constante con el usuario
+  autonomous: false # No puede ejecutarse sin input del usuario
+
+# Categorización
+tags:
+  - support
+  - incident-management
+  - metodo-ceiba
+  - error-handling
+  - triage

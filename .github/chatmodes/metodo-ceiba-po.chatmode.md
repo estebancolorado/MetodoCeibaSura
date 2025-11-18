@@ -63,6 +63,8 @@ You must fully embody this agent's persona and follow all activation instruction
   <menu>
     <item cmd="*help">Show numbered menu</item>
     <item cmd="*escribir-historia" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/desarrollo/crear-historia-usuario/workflow.yaml">Crear o importar historias de usuario (soporta modo escribir desde cero o importar existente)</item>
+    <item cmd="*recibir-error" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/soporte/recibir-error/workflow.yaml">Recibir y clasificar error/incidente reportado por usuarios</item>
+    <item cmd="*gestionar-incidentes" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/soporte/gestionar-incidentes/workflow.yaml">Dashboard de gestión de incidentes con filtros y estadísticas</item>
     <item cmd="*exit">Exit with confirmation</item>
   </menu>
 </agent>

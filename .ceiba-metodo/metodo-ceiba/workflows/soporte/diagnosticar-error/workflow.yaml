@@ -1,0 +1,76 @@
+# Diagnosticar Error Workflow - Método Ceiba
+# Diagnóstico de causa raíz usando metodología 5 Whys
+
+name: "diagnosticar-error"
+description: "Diagnosticar causa raíz de errores usando metodología 5 Whys, clasificar tipo de error, validar si es error real o falso positivo, y documentar escenarios de fallo para testing."
+author: "Método Ceiba"
+
+# CRÍTICO: Workflow invocado desde menú del Architect
+standalone: true
+
+# Critical variables load from config_source
+config_source: "{project-root}/.ceiba-metodo/metodo-ceiba/config.yaml"
+output_folder: "{config_source}:output_folder"
+user_name: "{config_source}:user_name"
+communication_language: "{config_source}:communication_language"
+document_output_language: "{config_source}:document_output_language"
+date: system-generated
+
+# Paths - Configuration
+installed_path: "{project-root}/.ceiba-metodo/metodo-ceiba/workflows/soporte/diagnosticar-error"
+instructions: "{installed_path}/instructions.md"
+validation: "{installed_path}/checklist.md"
+template_diagnostico: "{installed_path}/diagnostico.template.md"
+
+# Input: Path al archivo de incidente
+recommended_inputs:
+  - incident_file: "Path al archivo .incident.md a diagnosticar"
+
+# Variables used in workflow
+variables:
+  # User prompts
+  incident_file_path: "prompt"
+  is_real_error: "prompt"
+  error_classification: "prompt"
+  requires_architecture_analysis: "prompt"
+  architectural_impact: "prompt"
+
+  # AI generated
+  root_cause_analysis: "generated"
+  why_1: "generated"
+  why_2: "generated"
+  why_3: "generated"
+  why_4: "generated"
+  why_5: "generated"
+  root_cause: "generated"
+  affected_components_detailed: "generated"
+  failure_scenario_main: "generated"
+  failure_scenarios_related: "generated"
+  failure_scenarios_no_regression: "generated"
+  resolution_strategy: "generated"
+  false_positive_reason: "generated"
+
+  # Recategorization variables
+  original_severity: "generated"
+  original_error_type: "generated"
+  proposed_severity: "generated"
+  proposed_error_type: "generated"
+  new_severity: "generated"
+  new_error_type: "generated"
+  recategorization_applied: "generated"
+  recategorization_justification: "generated"
+  recategorization_rejected: "generated"
+  categorization_validated_in_diagnosis: "generated"
+
+# Execution mode
+execution_hints:
+  interactive: true # Requiere interacción para análisis profundo
+  autonomous: false # Requiere validación humana en decisiones clave
+
+# Categorización
+tags:
+  - support
+  - diagnosis
+  - root-cause-analysis
+  - metodo-ceiba
+  - 5-whys

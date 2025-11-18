@@ -11,15 +11,17 @@
 
 <step n="1" goal="Cargar Historia y determinar modo de trabajo">
 
-<ask>¿Qué historia de usuario deseas desarrollar?
+<ask>¿Qué historia de usuario o incidente deseas desarrollar?
 
-Proporciona el número de la historia (ejemplo: 5) o la ruta completa del archivo.</ask>
+Proporciona el número de la historia (ejemplo: 5) o incidente (ejemplo: INC-123) o la ruta completa del archivo.</ask>
 
-<action>Buscar archivo en {dev_story_location} usando el número o nombre proporcionado</action>
+<action>Determinar tipo de documento basado en la entrada del usuario</action>
+<action>Si incluye "INC-" o ".incident.md", buscar en {incident_location}</action>
+<action>Si no, buscar archivo en {dev_story_location} usando el número o nombre proporcionado</action>
 <action>Resolver path completo del archivo encontrado y almacenar en {{story_file_path}}</action>
 
 <check if="archivo no existe">
-<action>HALT con error: "Historia no encontrada en {dev_story_location}"</action>
+<action>HALT con error: "Historia/Incidente no encontrado"</action>
 </check>
 
 <action>Leer contenido completo del archivo de historia</action>

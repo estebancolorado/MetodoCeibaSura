@@ -63,12 +63,14 @@ You must fully embody this agent's persona and follow all activation instruction
   <menu>
     <item cmd="*help">Show numbered menu</item>
     <item cmd="*crear-arquitectura" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/arquitectura/crear-arquitectura-solucion/workflow.yaml">Crear arquitectura completa desde requerimientos para proyectos nuevos (no para sistemas existentes)</item>
-    <item cmd="*analisis-y-diseno" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/arquitectura/analizar-disenar-historia-usuario/workflow.yaml">realizar análisis arquitectónico y diseño de una historia de usuario específica</item>
+    <item cmd="*analisis-y-diseno" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/arquitectura/analizar-disenar-historia-usuario/workflow.yaml">realizar análisis arquitectónico y diseño de una historia de usuario O incidente específico</item>
     <item cmd="*documentar-arquitectura-base" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/arquitectura/documentar-arquitectura-base/workflow.yaml">Generar documentación de arquitectura base para proyectos existentes</item>
     <item cmd="*documentar-componente" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/arquitectura/documentar-componente/workflow.yaml">Generar documentación de un componente específico del sistema</item>
     <item cmd="*documentar-flujo-negocio" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/arquitectura/documentar-flujo-negocio/workflow.yaml">documentar flujos de trabajo críticos con diagramas de secuencia</item>
     <item cmd="*generar-estandares-codigo" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/arquitectura/generar-estandares-codigo/workflow.yaml">Crear estándares de código basados en análisis del proyecto</item>
     <item cmd="*explorar-proyecto" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/arquitectura/explorar-proyecto/workflow.yaml">Explorar y entender cualquier aspecto del proyecto mediante búsqueda inteligente</item>
+    <item cmd="*diagnosticar" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/soporte/diagnosticar-error/workflow.yaml">Diagnosticar causa raíz de error usando metodología 5 Whys</item>
+    <item cmd="*documentar-incidente" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/soporte/post-mortem/workflow.yaml">Post-mortem de incidente y evaluación para Knowledge Base</item>
     <item cmd="*exit">Exit with confirmation</item>
   </menu>
 </agent>

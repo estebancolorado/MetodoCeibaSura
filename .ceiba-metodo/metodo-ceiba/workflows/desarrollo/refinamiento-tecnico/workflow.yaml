@@ -21,6 +21,7 @@ template_file: "{installed_path}/template.md"
 variables:
   story_number: "prompt" # Número de la historia a refinar
   dev_story_location: "{config_source}:dev_story_location" # Directory where stories are stored
+  incident_location: "{config_source}:incident_location" # Directory where incidents are stored
   architecture_sharded_location: "{config_source}:architecture_sharded_location" # Architecture docs location
   coding_standards_file: "coding-standards.md" # Archivo de estándares de código a buscar
 

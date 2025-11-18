@@ -14,6 +14,7 @@ date: system-generated
 
 # Story and Architecture locations
 dev_story_location: "{config_source}:dev_story_location"
+incident_location: "{config_source}:incident_location"
 architecture_sharded_location: "{config_source}:architecture_sharded_location"
 architecture_file: "{config_source}:architecture_file"
 

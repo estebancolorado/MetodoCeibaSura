@@ -12,15 +12,17 @@
 
 <critical>PREREQUISITO: La historia DEBE estar refinada por el Developer con tareas de implementación definidas</critical>
 
-<ask>¿Qué historia de usuario deseas estimar?
+<ask>¿Qué historia de usuario o incidente deseas estimar?
 
-Proporciona el número de la historia (ejemplo: 5) o la ruta completa del archivo.</ask>
+Proporciona el número de la historia (ejemplo: 5) o incidente (ejemplo: INC-123) o la ruta completa del archivo.</ask>
 
-<action>Buscar archivo en {dev_story_location} usando el número o nombre proporcionado</action>
+<action>Determinar tipo de documento basado en la entrada del usuario</action>
+<action>Si incluye "INC-" o ".incident.md", buscar en {incident_location}</action>
+<action>Si no, buscar archivo en {dev_story_location} usando el número o nombre proporcionado</action>
 <action>Resolver path completo del archivo encontrado y almacenar en {{story_file_path}}</action>
 
 <check if="archivo no existe">
-<action>HALT con error: "Historia no encontrada en {dev_story_location}"</action>
+<action>HALT con error: "Historia/Incidente no encontrado"</action>
 </check>
 
 <action>Cargar contenido COMPLETO de la historia</action>
@@ -63,8 +65,12 @@ ACCIÓN REQUERIDA: Ejecuta *refinamiento-tecnico en el agente Developer para:
 No es posible estimar sin tareas definidas.</output>
 </check>
 
-<action>Extraer todas las tareas de la sección "Tareas de Implementación"</action>
-<action>Contar número de tareas encontradas</action>
+<critical>La siguiente es la forma para extraer solo las tareas principales que son las que se van a estimar en los siguientes pasos</critical>
+<mandate>Extraer SOLO tareas principales (formato: - [ ] **Tarea Principal**) - IGNORAR subtareas con sangría</mandate>
+<critical>Patrón exacto de tarea principal: "- [ ] **Texto de la tarea**" (sin sangría, texto entre doble asterisco)</critical>
+<critical>Las subtareas con sangría (  - [ ]) son CHECKLIST de implementación - NUNCA se extraen ni estiman</critical>
+<action>Ejemplo: "- [ ] **Crear 5 tests de validación**" → ✅ ESTIMAR | "  - [ ] Test sábado" → ❌ IGNORAR</action>
+<action>Contar número de tareas principales encontradas</action>
 
 <output>✅ Historia validada:
 - Archivo: {{story_file_path}}
@@ -101,13 +107,15 @@ No es posible estimar sin tareas definidas.</output>
 
 <step n="3" goal="Estimar Cada Tarea por Perfil de Desarrollador">
 
-<critical>Estimar ÚNICAMENTE las tareas extraídas de la sección "Tareas de Implementación"</critical>
+<mandate>Estimar SOLO tareas principales extraídas en Step 1 - NO incluir subtareas</mandate>
+<critical>Iterar ÚNICAMENTE sobre tareas principales (sin sangría) - Las subtareas NO están en el array</critical>
 <critical>NO crear nuevas tareas ni modificar las existentes</critical>
 
 <for-each item="tarea" in="tareas_implementacion">
 
 <substep n="3.1" goal="Analizar Tarea Individual">
 
+<critical>Esta tarea es una tarea PRINCIPAL - Las subtareas bajo ella son solo contexto, NO se estiman</critical>
 <action>Extraer descripción completa de la tarea</action>
 <action>Identificar tipo de tarea:</action>
 <action>- Desarrollo de código (backend/frontend)</action>
@@ -181,49 +189,45 @@ No es posible estimar sin tareas definidas.</output>
 
 </substep>
 
-<substep n="3.4" goal="Calcular Tiempo Método Ceiba por Seniority">
+<substep n="3.4" goal="Clasificar Tarea: Aumentada por IA vs Manual">
 
-<critical>Método Ceiba discount = {estimation_factors.metodo_ceiba_discount} (60% de ahorro)</critical>
-<critical>Fórmula: Método Ceiba = Senior × (1 - discount)</critical>
-<critical>Ejemplo: Senior = 10h → Método Ceiba Senior = 10h × (1 - 0.60) = 10h × 0.40 = 4h</critical>
+<action>Evaluar si la tarea puede ser aumentada/impactada por IA o requiere intervención 100% manual</action>
+<action>Identificar tareas manuales sin beneficio de IA, como por ejemplo: Ejecución de pipelines y despliegues, Configuraciones manuales en servidores/infraestructura,  Coordinación con equipos externos (emails, reuniones), Aprobaciones de seguridad/compliance, Ejecución manual de scripts SQL en base de datos </action>
+<check if="tarea es MANUAL (NO impactada por IA)">
+    <action>Para tareas manuales:</action>
+    <action>1. Añadir a array separado: **tareas_manuales**</action>
+    <action>2. Incluir propiedades: numero, descripcion, tiempo_estimado</action>
+    <action>3. Usar tiempo Senior como tiempo_estimado (sin variación por seniority)</action>
+    <action>4. NO incluir en tabla principal de estimación</action>
 
-<check if="tarea NO es automatizable por IA">
-<action>Identificar tareas manuales sin beneficio de automatización:</action>
-<action>- Ejecución manual de scripts SQL en base de datos</action>
-<action>- Configuraciones manuales en servidores/infraestructura</action>
-<action>- Coordinación con equipos externos (emails, reuniones)</action>
-<action>- Aprobaciones de seguridad/compliance que requieren humano</action>
-<action>- Validaciones manuales de negocio (no code)</action>
-<action>**Para estas tareas: Método Ceiba = Tiempo Tradicional (copiar valores sin descuento)**</action>
-<action>- Método Ceiba Junior = Junior</action>
-<action>- Método Ceiba Semi Senior = Semi Senior</action>
-<action>- Método Ceiba Senior = Senior</action>
-<action>SKIP al siguiente paso (no aplicar descuento)</action>
+    <action>SKIP del paso 3.5, solo se estiman tareas aumentadas por IA</action>
 </check>
-
-<action>Para tareas automatizables, calcular Método Ceiba con descuento:</action>
-
-<action>1. Método Ceiba Senior = Senior × (1 - {estimation_factors.metodo_ceiba_discount})</action>
-
-<action>2. Aplicar multiplicadores de seniority al resultado:</action>
-<action>- Método Ceiba Junior = Método Ceiba Senior × multiplicador_complejidad</action>
-<action>- Método Ceiba Semi Senior = Método Ceiba Senior × multiplicador_complejidad</action>
-
-<action>Ejemplo completo con complejidad MEDIA:</action>
-<action>- Senior tradicional: 10h</action>
-<action>- Método Ceiba Senior: 10h × 0.40 = 4h</action>
-<action>- Método Ceiba Semi Sr: 4h × 1.6 = 6.4h</action>
-<action>- Método Ceiba Junior: 4h × 2.5 = 10h</action>
 
 </substep>
 
+<substep n="3.5" goal="Calcular Tiempo Método Ceiba (Solo Tareas Aumentadas por IA)">
+    <critical>Este substep solo aplica para tareas aumentadas/impactadas por IA</critical>
+    <critical>Método Ceiba discount = {estimation_factors.metodo_ceiba_discount} (60% de ahorro)</critical>
+    <critical>Fórmula: Método Ceiba = Senior × (1 - discount)</critical>
+    <action>Calcular Método Ceiba Senior:</action>
+    <action>**Método Ceiba Senior = Senior × (1 - {estimation_factors.metodo_ceiba_discount})**</action>
+    <action>Ejemplo: Senior = 10h → MC Senior = 10h × 0.40 = 4h</action>
+    <action>Aplicar multiplicadores de seniority al resultado:</action>
+    <action>**Método Ceiba Junior = MC Senior × multiplicador_complejidad**</action>
+    <action>**Método Ceiba Semi Senior = MC Senior × multiplicador_complejidad**</action>
+    <action>Ejemplo completo con complejidad MEDIA:</action>
+    <action>- Senior tradicional: 10h</action>
+    <action>- MC Senior: 10h × 0.40 = 4h</action>
+    <action>- MC Semi Sr: 4h × 1.6 = 6.4h</action>
+    <action>- MC Junior: 4h × 2.5 = 10h</action>
+    <action>Añadir tarea a array: **tareas** (tabla principal)</action>
+</substep>
 </for-each>
-
 </step>
 
 <step n="4" goal="Consolidar Estimaciones y Calcular Totales">
 
-<action>Crear tabla de estimación con todas las tareas</action>
+<action>Crear tabla principal con tareas aumentadas por IA</action>
 <action>Incluir columnas:</action>
 <action>- #, Tarea, Complejidad</action>
 <action>- Junior, Semi Sr, Senior (estimaciones tradicionales)</action>
@@ -233,6 +237,16 @@ No es posible estimar sin tareas definidas.</output>
 <action>Redondear a un decimal (ej: 12.5h)</action>
 
 <action>Calcular porcentaje de optimización del Método Ceiba vs tradicional para cada perfil</action>
+
+<check if="existen tareas_manuales">
+<action>Crear array separado con tareas manuales</action>
+<action>Para cada tarea manual incluir: numero, descripcion, tiempo_estimado</action>
+<action>Calcular total_tareas_manuales (suma de todos los tiempos)</action>
+<action>Calcular totales de desarrollo completo por rol:</action>
+<action>- total_desarrollo_junior = total_mc_junior + total_tareas_manuales</action>
+<action>- total_desarrollo_semi_sr = total_mc_semi_sr + total_tareas_manuales</action>
+<action>- total_desarrollo_senior = total_mc_senior + total_tareas_manuales</action>
+</check>
 
 </step>
 
@@ -276,6 +290,15 @@ Recomendación: Considerar spikes técnicos o división de tareas.</output>
 <template-output>tareas</template-output>
 
 <note>Cada elemento en 'tareas' debe incluir: numero, descripcion, complejidad, junior, semi_sr, senior, mc_junior, mc_semi_sr, mc_senior</note>
+
+<mandate>Variables OPCIONALES - Tareas Manuales (array):</mandate>
+<template-output>tareas_manuales</template-output>
+<template-output>total_tareas_manuales</template-output>
+<template-output>total_desarrollo_junior</template-output>
+<template-output>total_desarrollo_semi_sr</template-output>
+<template-output>total_desarrollo_senior</template-output>
+
+<note>Cada elemento en 'tareas_manuales' debe incluir: numero, descripcion, tiempo_estimado. Los totales de desarrollo son la suma de MC + tareas manuales por cada rol. Solo incluir si existen tareas manuales.</note>
 
 <mandate>Variables OBLIGATORIAS - Totales:</mandate>
 <template-output>total_junior</template-output>
@@ -343,7 +366,13 @@ Estimador: {user_name}</output>
 
 </step>
 
-<step n="9" goal="Resumen y Próximos Pasos">
+<step n="9" goal="Validar Completitud de Estimación">
+
+<invoke-task>Validate against checklist at {validation} using ceiba-metodo/core/tasks/validate-workflow.xml</invoke-task>
+
+</step>
+
+<step n="10" goal="Resumen y Próximos Pasos">
 
 <output>
 ╔════════════════════════════════════════════════════════╗
@@ -384,7 +413,7 @@ Selecciona opción (1/2/3):</ask>
 <action>Realizar ajustes según feedback del usuario</action>
 <action>Re-generar sección de estimación con ajustes</action>
 <action>Actualizar archivo de historia con versión corregida</action>
-<goto step="9">Volver a validación final</goto>
+<goto step="10">Volver a validación final</goto>
 </check>
 
 <check if="usuario elige OTRA">

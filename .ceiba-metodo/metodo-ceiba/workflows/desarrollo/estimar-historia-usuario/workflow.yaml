@@ -16,11 +16,13 @@ installed_path: "{project-root}/.ceiba-metodo/metodo-ceiba/workflows/desarrollo/
 template: true
 instructions: "{installed_path}/instructions.md"
 template_file: "{installed_path}/template.md"
+validation: "{installed_path}/checklist.md"
 
 # Variables used in workflow - resolved from config_source or prompted
 variables:
   story_number: "prompt" # Número de la historia a estimar
   dev_story_location: "{config_source}:dev_story_location" # Directory where stories are stored
+  incident_location: "{config_source}:incident_location" # Directory where incidents are stored
 
 # Output configuration - enriches existing story file
 default_output_file: "{dev_story_location}/{story_number}.story.md"

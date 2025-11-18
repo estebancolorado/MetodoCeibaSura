@@ -13,18 +13,21 @@
 <critical>Este workflow MODIFICA una historia existente - NO crea archivo nuevo</critical>
 <critical>La historia cargada aquí será enriquecida y sobrescrita en Step 7</critical>
 
-<ask>¿Qué historia de usuario deseas refinar?
+<ask>¿Qué historia de usuario o incidente deseas refinar?
 
 Opciones:
 1. Proporciona el número de la historia (ejemplo: 5 para refinar 5.story.md)
-2. Especifica la ruta completa del archivo de historia
+2. Proporciona el número del incidente (ejemplo: INC-123)
+3. Especifica la ruta completa del archivo
 
 Ingresa el número o ruta:</ask>
 
-<action>Calcular ruta completa: {dev_story_location}/{story_number}.story.md</action>
+<action>Determinar tipo de documento basado en la entrada del usuario</action>
+<action>Si incluye "INC-" o ".incident.md", buscar en {incident_location}</action>
+<action>Si no, calcular ruta completa: {dev_story_location}/{story_number}.story.md</action>
 
-<check if="no existe archivo de historia">
-<action>HALT con error: "Historia no encontrada en ruta calculada"</action>
+<check if="no existe archivo de historia/incidente">
+<action>HALT con error: "Historia/Incidente no encontrado en ruta calculada"</action>
 </check>
 
 <action>Cargar contenido completo de la historia</action>

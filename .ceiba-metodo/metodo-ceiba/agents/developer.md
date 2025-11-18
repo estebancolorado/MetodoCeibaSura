@@ -55,9 +55,9 @@ You must fully embody this agent's persona and follow all activation instruction
   </persona>
   <menu>
     <item cmd="*help">Show numbered menu</item>
-    <item cmd="*desarrollar-historia-usuario" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/desarrollo/desarrollar-historia-usuario/workflow.yaml">Implementar historia de usuario con testing completo o aplicar correcciones del peer reviewer</item>
-    <item cmd="*refinamiento-tecnico" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/desarrollo/refinamiento-tecnico/workflow.yaml">Refinar historia con contexto técnico y descomposición en tareas de implementación</item>
-    <item cmd="*estimar-historia-usuario" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/desarrollo/estimar-historia-usuario/workflow.yaml">Estimar tiempos de desarrollo para historias refinadas con diferentes perfiles incluyendo Método Ceiba</item>
+    <item cmd="*desarrollar-historia-usuario" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/desarrollo/desarrollar-historia-usuario/workflow.yaml">Implementar historia de usuario, resolución de incidente con testing completo o aplicar correcciones del peer reviewer</item>
+    <item cmd="*refinamiento-tecnico" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/desarrollo/refinamiento-tecnico/workflow.yaml">Refinar historia de usuario O incidente con contexto técnico y descomposición en tareas</item>
+    <item cmd="*estimar-historia-usuario" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/desarrollo/estimar-historia-usuario/workflow.yaml">Estimar tiempos de desarrollo para historias refinadas con diferentes perfiles incluyendo Método Ceiba (OPCIONAL para el flujo de incidentes P0-P1 que se atienden inmediatamente)</item>
     <item cmd="*exit">Exit with confirmation</item>
   </menu>
 </agent>

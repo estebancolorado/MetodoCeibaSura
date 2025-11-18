@@ -1,732 +1,1010 @@
-# Método Ceiba
+# Método Ceiba - Guía Completa
 
-## ¿Qué es el Método Ceiba?
+## 📑 Índice
 
-El **Método Ceiba** es una forma estructurada de trabajar el ciclo de vida del desarrollo de software apoyada por agentes impulsados por IA. Su objetivo es:
-
-- Acelerar la entrega manteniendo calidad consistente.
-- Reutilizar el conocimiento del proyecto (documentación + código) en cada iteración.
-- Guiar a roles técnicos y no técnicos con pasos claros y automatizados.
-- Mantener una "documentación viva" (Mapa de Arquitectura / *GPS arquitectónico*) siempre alineada con el código fuente.
-
-Cada agente cubre una etapa crítica: definición del requerimiento, análisis y diseño, refinamiento, desarrollo y revisión de calidad. El sistema siempre toma como contexto la documentación y el código existente para producir salidas más precisas y reducir retrabajos.
+- [¿Qué es el Método Ceiba?](#-qué-es-el-método-ceiba)
+- [Beneficios y Características](#-beneficios-y-características)
+- [Roles y Agentes](#-roles-y-agentes)
+- [Flujos de Trabajo](#-flujos-de-trabajo)
+  - [1. Flujo de Desarrollo de Software](#1-flujo-de-desarrollo-de-software)
+  - [2. Flujo de Migraciones](#2-flujo-de-migraciones)
+  - [3. Flujo de Soporte y Gestión de Incidentes](#3-flujo-de-soporte-y-gestión-de-incidentes)
+- [Instalación y Configuración](#-instalación-y-configuración)
+- [Guía de Inicio Rápido](#-guía-de-inicio-rápido)
+- [Estructura de Archivos](#-estructura-de-archivos)
+- [Comandos Disponibles por Agente](#-comandos-disponibles-por-agente)
 
 ---
 
-## Diagrama general del flujo para desarrollo y migraciones
+## 🌳 ¿Qué es el Método Ceiba?
+
+El **Método Ceiba** es un framework estructurado de desarrollo de software que integra agentes impulsados por IA para acelerar y optimizar el ciclo completo de desarrollo. Su nombre hace referencia al árbol Ceiba, símbolo de fortaleza y conexión, representando la integración robusta entre personas, procesos y tecnología.
+
+### Objetivo Principal
+
+Proporcionar un enfoque sistemático que:
+
+- ✅ **Acelera la entrega** manteniendo calidad consistente
+- ✅ **Reutiliza conocimiento** mediante documentación viva que evoluciona con el código
+- ✅ **Guía a todos los roles** con flujos claros y automatizados
+- ✅ **Mantiene trazabilidad** completa desde requisitos hasta código
+- ✅ **Reduce retrabajos** usando contexto arquitectónico en cada decisión
+
+### Concepto de "Documentación Viva"
+
+El Método Ceiba implementa un **GPS Arquitectónico** (Mapa de Arquitectura) que:
+
+- Se actualiza automáticamente con cada cambio
+- Conecta decisiones arquitectónicas con código fuente
+- Sirve como fuente única de verdad del sistema
+- Facilita onboarding de nuevos integrantes
+- Permite consultas inteligentes sobre el sistema
+
+
+## 🎯 Beneficios y Características
+
+### ⚡ Eficiencia y Velocidad
+
+| Beneficio | Descripción |
+|-----------|-------------|
+| **Velocidad con contexto** | Cada acción consume documentación y código existentes, evitando redacción duplicada |
+| **Onboarding acelerado** | Nuevo talento entiende el sistema mediante el GPS Arquitectónico y historias enriquecidas |
+| **Reducción de tiempos** | Documentación clara y estructurada disminuye curva de aprendizaje |
+
+### 📚 Documentación Viva e Integración
+
+| Característica | Valor |
+|----------------|-------|
+| **GPS arquitectónico** | Se actualiza con cada desarrollo, manteniendo coherencia |
+| **Trazabilidad completa** | Historias conectadas a componentes, flujos y decisiones arquitectónicas |
+| **Estándares específicos** | Basados en análisis real del código del proyecto |
+| **Coherencia garantizada** | Historias fundamentadas en documentación arquitectónica existente |
+
+### 🛡️ Calidad y Gestión Estructurada
+
+| Aspecto | Implementación |
+|---------|----------------|
+| **Calidad continua** | Revisión estructurada con estándares derivados del proyecto |
+| **Reducción de riesgo** | Análisis y diseño explícitos antes de codificar |
+| **Revisión obligatoria** | Gates de calidad definidos y peer review sistemático |
+| **Estimación fundamentada** | Basada en análisis de riesgos y complejidad técnica |
+
+### 🔄 Aprendizaje y Mejora Continua
+
+- **Aprendizaje organizacional**: Documentación viva evoluciona con cada entrega
+- **Patrones reutilizables**: Arquitectura capturada acelera desarrollos futuros
+- **Procesos transparentes**: Retroalimentación continua entre roles
+- **Mejora iterativa**: Cada ciclo refina prácticas y conocimiento
+
+---
+
+## 👥 Roles y Agentes
+
+El Método Ceiba define 4 agentes especializados que corresponden a roles técnicos dentro del equipo:
+
+### 🏗️ Arquitecto (Architect)
+
+**Icono**: 🏗️  
+**Responsabilidades**:
+- Documentar arquitectura base y componentes
+- Analizar y diseñar historias de usuario complejas
+- Documentar flujos de negocio críticos
+- Generar estándares de código específicos del proyecto
+- Explorar y analizar el proyecto en profundidad
+- Diagnosticar incidentes críticos
+
+**Roles de la empresa que lo usan**: Coach técnico, Líder técnico, Arquitecto de software
+
+**Principios**:
+- Pensamiento holístico de sistemas
+- La experiencia de usuario impulsa la arquitectura
+- Selección pragmática de tecnología
+- Complejidad progresiva
+- Seguridad en cada capa
+
+### 📝 Product Owner (PO)
+
+**Icono**: 📝  
+**Responsabilidades**:
+- Crear y gestionar historias de usuario
+- Definir criterios de aceptación funcionales
+- Priorizar backlog
+- Recibir y clasificar errores e incidentes
+- Gestionar dashboard de incidentes
+
+**Roles de la empresa que lo usan**: Gerentes de proyecto, Product Managers, Analistas funcionales
+
+**Principios**:
+- Investigador meticuloso de contexto
+- Elicitación estratégica mediante preguntas precisas
+- Cazador de ambigüedades
+- Garantía de completitud exhaustiva
+- Adherencia rigurosa a templates y estándares
+
+### 💻 Desarrollador (Developer)
+
+**Icono**: 💻  
+**Responsabilidades**:
+- Refinar historias de usuario con contexto técnico
+- Estimar esfuerzo de desarrollo
+- Implementar funcionalidades
+- Ejecutar pruebas completas
+- Aplicar correcciones post-revisión
+
+**Roles de la empresa que lo usan**: Desarrolladores Full-Stack, Front-end, Back-end
+
+**Principios**:
+- La historia es la fuente única de verdad
+- Verificación del contexto antes de crear estructuras nuevas
+- Flujo human-in-the-loop estricto
+- Testing sin excepciones antes de completar tareas
+
+### 🔍 Peer Reviewer
+
+**Icono**: 🔍  
+**Responsabilidades**:
+- Revisar código implementado
+- Validar calidad, seguridad y arquitectura
+- Verificar cumplimiento de criterios de aceptación
+- Aprobar o solicitar correcciones
+- Garantizar adherencia a estándares
+
+**Roles de la empresa que lo usan**: Desarrolladores Senior, Tech Leads
+
+**Principios**:
+- Seguridad primero
+- Calidad sin compromiso
+- Tests que realmente testean
+- Arquitectura como contrato
+- Feedback accionable
+
+---
+
+## 🔄 Flujos de Trabajo
+
+El Método Ceiba proporciona tres flujos principales especializados:
+
+### 1. Flujo de Desarrollo de Software
+
+Este flujo cubre el ciclo completo desde la concepción de una funcionalidad hasta su entrega en producción.
+
+#### 📊 Diagrama del Flujo
 
 ```mermaid
 flowchart TD
-    %% Insumos iniciales
-    INDOC["📚 Insumos de documentación técnica y de negocio"]
-    INCODE["💾 Código fuente"]
+    %% Inicio
+    START["Inicio del<br/>Desarrollo"]
     
-    %% Tareas agrupadas por agente
-    TARQ["Documentar arquitectura base<br/><br/>Documentar componentes<br/><br/>Documentar flujos de negocio principales<br/><br/>Generar estandares de codificación<br/><br/>Documentar arquitectura TO-BE<br/><br/>(🤖 Arquitecto)"]
-    TPO["Escribir/Importar historia de Usuario desde un perfil técnico o funcional<br/>(🤖 Product Owner)"]
-    TANAL["Analisis y Diseno de historia de usuario<br/>(🤖 Arquitecto)"]
-    TDEV["Refinamiento-técnico/tasking historias<br/><br/>Estimar historias<br/><br/>Desarrollar historias de usuario<br/><br/>(🤖 Desarrollador)"]
-    TPR["Revision par del desarrollo<br/>(🤖 Peer Reviewer)"]
-    TEXP["Explorar-proyecto<br/>Preguntas profundas al código fuente<br/>(🤖 Arquitecto)"]
+    %% Fase 1
+    FASE1["FASE 1<br/>🏗️ Documentación<br/>Arquitectónica<br/>(Arquitecto)"]
     
-    %% Salidas/Resultados
-    DOC["📖 Documentación técnica y de negocio"]
-    HIST["📝 Historias de usuario"]
-    HANAL["📝 Historia de usuario refinada por el arquitecto"]
-    REF["📝 Historias de usuario con plan de implementación técnico detallado"]
-    DEV["💻 Código fuente modificado"]
-    REV["👀 Revisión de código fuente"]
-    EXPOUT["📊 Análisis profundo del código"]
+    %% Fase 2
+    FASE2["FASE 2<br/>📝 Creación de<br/>Historias<br/>(PO)"]
     
-    %% Flujo principal con insumos iniciales
-    INDOC --> TARQ
-    INCODE --> TARQ
-    TARQ --> DOC
-    DOC --> TPO
-    TPO --> HIST
-    HIST --> TANAL
-    TANAL --> HANAL
-    HANAL --> TDEV
-    TDEV --> REF
-    REF --> TDEV
-    TDEV --> DEV
-    DEV --> TPR
-    TPR --> REV
-    REV --> TDEV
+    %% Fase 3
+    FASE3["FASE 3<br/>🏗️ Análisis y<br/>Diseño<br/>(Arquitecto)"]
     
-    %% Flujo opcional de exploración (línea punteada)
-    DOC -.->|opcional| TEXP
-    TEXP -.-> EXPOUT
+    %% Fase 4
+    FASE4["FASE 4<br/>💻 Refinamiento<br/>Técnico<br/>(Dev)"]
+    
+    %% Fase 5
+    FASE5["FASE 5<br/>💻 Estimación<br/>(Dev)"]
+    
+    %% Fase 6
+    FASE6["FASE 6<br/>💻 Desarrollo<br/>(Dev)"]
+    
+    %% Fase 7
+    FASE7["FASE 7<br/>🔍 Revisión de<br/>Calidad<br/>(Peer Reviewer)"]
+    
+    %% Fase 8
+    FASE8["FASE 8<br/>💻 Correcciones<br/>(Dev)"]
+    
+    %% Fin
+    END["✅ Historia<br/>Completada"]
+    
+    %% Flujo principal
+    START --> FASE1
+    FASE1 --> FASE2
+    FASE2 --> FASE3
+    FASE3 --> FASE4
+    FASE4 --> FASE5
+    FASE5 --> FASE6
+    FASE6 --> FASE7
+    FASE7 -->|PASS| END
+    FASE7 -->|FAIL| FASE8
+    FASE8 --> FASE7
     
     %% Estilos
-    %% Insumos iniciales - Verde claro con texto negro
-    style INDOC fill:#e8f5e8,stroke:#4caf50,stroke-width:2px,color:#000000
-    style INCODE fill:#e8f5e8,stroke:#4caf50,stroke-width:2px,color:#000000
-    
-    %% Tareas - Gris claro con bordes y texto negro
-    style TARQ fill:#f5f5f5,stroke:#333,stroke-width:2px,color:#000000
-    style TPO fill:#f5f5f5,stroke:#333,stroke-width:2px,color:#000000
-    style TANAL fill:#f5f5f5,stroke:#333,stroke-width:2px,color:#000000
-    style TDEV fill:#f5f5f5,stroke:#333,stroke-width:2px,color:#000000
-    style TPR fill:#f5f5f5,stroke:#333,stroke-width:2px,color:#000000
-    style TEXP fill:#f5f5f5,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5,color:#000000
-    
-    %% Salidas - Azul claro con texto negro
-    style DOC fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000000
-    style HIST fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000000
-    style HANAL fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000000
-    style REF fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000000
-    style DEV fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000000
-    style REV fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000000
-    style EXPOUT fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,stroke-dasharray: 5 5,color:#000000
+    style START fill:#e8f5e8,stroke:#4caf50,stroke-width:3px,color:#000000
+    style FASE1 fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000000
+    style FASE2 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000000
+    style FASE3 fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000000
+    style FASE4 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000000
+    style FASE5 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000000
+    style FASE6 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000000
+    style FASE7 fill:#e0f2f1,stroke:#00695c,stroke-width:2px,color:#000000
+    style FASE8 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000000
+    style END fill:#c8e6c9,stroke:#2e7d32,stroke-width:3px,color:#000000
 ```
 
-**Leyenda de colores:**
-- 🟢 **Verde claro**: Insumos iniciales del proceso
-- ⚪ **Gris claro**: Tareas agrupadas por agente responsable
-- 🔵 **Azul**: Salidas/Resultados generados
-- **Líneas punteadas**: Procesos opcionales que se ejecutan bajo demanda
+**Leyenda**:
+- 🟢 Verde: Inicio del flujo
+- 🟠 Naranja: Tareas del Arquitecto
+- 🔵 Azul: Tareas del Product Owner
+- 🟣 Morado: Tareas del Desarrollador
+- 🔵 Turquesa: Revisión de Peer Reviewer
+- 🟢 Verde oscuro: Historia completada
 
-> Si el diagrama no se renderiza en tu visor Markdown, verifica que la plataforma soporte Mermaid o utiliza una extensión de Visual Studio Code que lo habilite.
+#### 🔢 Fases del Flujo de Desarrollo
 
----
+##### **FASE 1: Documentación Arquitectónica** 🏗️
 
-## Roles y Responsabilidades
+**Agente**: Arquitecto
 
-| Agente | Responsabilidades Principales | Roles de la Empresa que lo Usan |
-|--------|-------------------------------|----------------------------------|
-| Arquitecto | Documentar arquitectura base; Documentar componentes; Documentar flujos; Análisis y diseño de historia de usuario | Coach técnico / Líder técnico |
-| Product Owner | Escribir historias de usuario | Gerentes de proyecto |
-| Desarrollador | Refinar/tasking de historias de usuario; Estimar historias de usuario; Desarrollar historias de usuario | Desarrolladores |
-| Peer Reviewer | Revisión par del desarrollo de la historia de usuario | Desarrolladores |
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 1.1 | `architect *documentar-arquitectura-base` | Crear documentación base de arquitectura para proyectos complejos | `docs/architecture/index.md` |
+| 1.2 | `architect *documentar-componente` | Documentar componentes individuales con detalle técnico | `docs/architecture/architecture-{componente}.md` |
+| 1.3 | `architect *documentar-flujo-negocio` | Documentar flujos críticos con diagramas de secuencia | `docs/architecture/flujo-{nombre}.md` |
+| 1.4 | `architect *generar-estandares-codigo` | Crear estándares específicos basados en código existente | `docs/architecture/coding-standards.md` |
 
----
+**Cuándo ejecutar**: Al inicio del proyecto o cuando no existe documentación actualizada
 
-## Prerrequisitos
+##### **FASE 2: Creación de Historias** 📝
 
-- Node.js v22 o superior instalado.
-- (Recomendado) Usar bajo el IDE Visual Studio Code.
-- Acceso al repositorio del proyecto y su base de código existente.
-- Permisos para ejecutar `npx` en el entorno de trabajo.
+**Agente**: Product Owner
 
----
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 2.1 | `po *escribir-historia` | Crear historias estructuradas con criterios de aceptación | `docs/stories/{número}.story.md` |
 
-## 🎯 **Beneficios y Características del Método Ceiba**
+**Estado resultante**: `Borrador (PO)` - Lista para análisis arquitectónico
 
-### ⚡ **Eficiencia y Velocidad**
-- **Velocidad con contexto:** Cada acción consume documentación y código existentes para evitar redacción duplicada
-- **Onboarding acelerado:** Nuevo talento entiende el sistema a través del Mapa de Arquitectura (GPS) y las historias enriquecidas
-- **Reduce tiempo de onboarding** con documentación clara y estructurada
+##### **FASE 3: Análisis y Diseño** 🏗️
 
-### 📚 **Documentación Viva e Integración**
-- **GPS arquitectónico** que se actualiza con cada desarrollo
-- **Trazabilidad completa:** Historias conectadas a componentes, flujos y decisiones de arquitectura
-- **Estándares de código específicos** del proyecto basados en análisis real del código existente
-- **Las historias se basan** en documentación arquitectónica existente para mayor coherencia
+**Agente**: Arquitecto
 
-### 🛡️ **Calidad y Gestión Estructurada**
-- **Calidad continua:** Revisión estructurada y estándares derivados del propio proyecto
-- **Reducción de riesgo técnico:** Análisis y diseño explícitos antes de codificar
-- **Revisión por pares obligatoria** con gates de calidad definidos
-- **Estimación fundamentada** en análisis de riesgos y complejidad técnica
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 3.1 | `architect *analisis-y-diseno {número}` | Analizar arquitectura, tomar decisiones de diseño, proponer implementación | Historia actualizada con sección de análisis arquitectónico |
 
-### 🔄 **Aprendizaje y Mejora Continua**
-- **Aprendizaje organizacional:** La documentación viva evoluciona con cada entrega
-- **Patrones arquitectónicos reutilizables** que aceleran desarrollos futuros
-- **Procesos transparentes y trazables** con retroalimentación continua entre roles
+**Estado resultante**: `Analizado (Arquitecto)` - Lista para refinamiento técnico
 
----
+**⚠️ Importante**: Requiere validación humana obligatoria de las decisiones arquitectónicas
 
-## Descripción
+##### **FASE 4: Refinamiento Técnico** 💻
 
-El **Método Ceiba** es un framework de desarrollo especializado con prácticas y procesos específicos de Ceiba Software. Proporciona agentes especializados, flujos de trabajo estructurados y herramientas para equipos de desarrollo fullstack que manejan proyectos de desarrollo de software.
+**Agente**: Desarrollador
 
-## 📋 **Proceso Completo del Método Ceiba**
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 4.1 | `dev *refinamiento-tecnico {número}` | Enriquecer con contexto técnico y descomponer en tareas | Historia con descomposición técnica y tareas |
 
-Resumen de alto nivel de fases:
+**Estado resultante**: `Refinado (Dev)` - Lista para estimación
 
-1. Documentación Arquitectónica (Arquitecto)
-2. Creación de Historias (Product Owner)
-3. Análisis y Diseño específico (Arquitecto en historias complejas)
-4. Refinamiento y Estimación (Desarrollador)
-5. Desarrollo (Desarrollador)
-6. Revisión de Calidad (Peer Reviewer)
-7. Correcciones Post-Revisión (Desarrollador) - *Ciclo iterativo hasta aprobación*
+##### **FASE 5: Estimación** 💻
 
-El Método Ceiba sigue un flujo estructurado y sistemático que garantiza la calidad del software desde la documentación arquitectónica hasta la entrega final. A continuación se presenta el proceso completo paso a paso:
+**Agente**: Desarrollador
 
----
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 5.1 | `dev *estimar-historia-usuario {número}` | Estimar basado en complejidad y riesgos | Historia con estimación en story points |
 
-## 🏗️ **FASE 1: DOCUMENTACIÓN ARQUITECTÓNICA**
+**Estado resultante**: `Estimado (Dev)` - Lista para desarrollo
 
-### **Agente: Arquitecto**
+##### **FASE 6: Desarrollo** 💻
 
-#### **Paso 1.1: Documentar Arquitectura Base**
+**Agente**: Desarrollador
 
-```bash
-architect *documentar-arquitectura-base
-```
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 6.1 | `dev *desarrollar-historia-usuario {número}` | Implementar funcionalidad con pruebas completas | Código + Tests + Historia actualizada |
 
-**📄 Propósito:** Crear la documentación base de arquitectura para proyectos con múltiples repositorios y sistemas complejos.
+**Estado resultante**: `Implementado (Dev)` - Listo para revisión
 
-**📦 Entregables:**
+##### **FASE 7: Revisión de Calidad** 🔍
 
-- **Archivo principal:** `docs/architecture/index.md` - Documento completo de arquitectura
+**Agente**: Peer Reviewer
 
-**✅ Cuándo usar:** Al inicio del proyecto o cuando no existe documentación arquitectónica actualizada.
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 7.1 | `peer-reviewer *revisar-historia {número}` | Revisar calidad, seguridad, arquitectura y estándares | Historia con QA Results + Gate de decisión |
 
-#### **Paso 1.2: Documentar Componentes Específicos**
+**Posibles decisiones**:
+- ✅ **PASS**: Cumple todos los criterios, aprobado
+- ⚠️ **CONCERNS**: Tiene observaciones, puede continuar con seguimiento
+- ❌ **FAIL**: Requiere correcciones obligatorias
+- 🔄 **WAIVED**: Exenciones justificadas aprobadas
 
-```bash
-architect *documentar-componente
-```
+**Estado resultante**: `Revisado (QA)` - Según decisión del gate
 
-**📄 Propósito:** Documentar componentes individuales del sistema con detalle técnico específico.
+##### **FASE 8: Correcciones Post-Revisión** 💻 (Iterativo)
 
-**📦 Entregables:**
+**Agente**: Desarrollador
 
-- **Archivo:** `docs/architecture/architecture-{nombre-componente}.md`
-- **Contenido:** Overview, arquitectura interna, APIs, dependencias, despliegue
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 8.1 | `dev *desarrollar-historia-usuario {número}` | Implementar correcciones identificadas en revisión | Código corregido + Historia actualizada |
 
-**✅ Cuándo usar:** Para cada componente crítico del sistema que requiere documentación detallada.
+**Estado resultante**: `Corregido (Dev)` - Retorna a revisión
 
-#### **Paso 1.3: Documentar Flujos de Negocio**
-
-```bash
-architect *documentar-flujo-negocio
-```
-
-**📄 Propósito:** Documentar flujos de negocio críticos mediante diagramas de secuencia detallados.
-
-**📦 Entregables:**
-
-- **Archivo:** `docs/architecture/flujo-{nombre-flujo}.md`
-- **Contenido:** Diagramas de secuencia Mermaid, manejo de errores, casos de prueba, métricas
-
-**✅ Cuándo usar:** Para flujos de negocio complejos que involucran múltiples componentes.
-
-#### **Paso 1.4: Generar Estándares de Código**
-
-```bash
-architect *generar-estandares-codigo
-```
-
-**📄 Propósito:** Crear estándares de código específicos del proyecto basándose en análisis del código existente y mejores prácticas del equipo.
-
-**📦 Entregables:**
-
-- **Archivo:** `docs/architecture/coding-standards.md`
-- **Contenido:** Estándares obligatorios, convenciones recomendadas, configuración de herramientas, ejemplos prácticos
-
-**✅ Cuándo usar:**
-
-- Para proyectos sin estándares documentados pero con código existente
-- Cuando se necesita formalizar convenciones del equipo
-- Para crear guías claras para nuevos desarrolladores
-
-**🔍 Proceso:** Elicitación de contexto → Análisis de documentación existente → Análisis de código base → Generación de estándares
+**🔄 Ciclo iterativo**: Revisión → Corrección → Re-revisión hasta obtener estado PASS
 
 ---
 
-## 📝 **FASE 2: CREACIÓN DE HISTORIAS DE USUARIO**
+### 2. Flujo de Migraciones
 
-### **Agente: Product Owner (PO)**
+Las migraciones son procesos especiales que requieren enfoques adaptados según su naturaleza. El Método Ceiba distingue dos tipos:
 
-#### **Paso 2.1: Crear Historia de Usuario**
+#### 📋 Principios Generales de Migración
 
-```bash
-po *escribir-historia
-```
+Es fundamental identificar desde la fase comercial la arquitectura TO-BE, los indicadores KPI de éxito del proceso de migración, drivers de arquitectura que se deben garantizar y así mismo los adicionales que se deben de ejecutar en esta migración como por ejemplo: migrar pruebas existentes, nuevas pruebas unitarias, resolver deuda técnica, garantizar un porcentaje de cobertura, nuevas pruebas de integración, nuevas pruebas de carga, nuevas pruebas funcionales automatizadas, nuevas pruebas de seguridad.
 
-**📄 Propósito:** Crear historias de usuario estructuradas con información completa del negocio, aprovechando la documentación arquitectónica existente.
+Recordar que migrar no necesariamente debe de tener los adicionales anteriores y deben ser claramente identificados y estimados en la fase de pivotes en caso de aplicar.
 
-**📦 Entregables:**
-
-- **Archivo:** `docs/stories/{número}.story.md`
-- **Contenido:**
-  - Historia en formato "Como... Quiero... Para..."
-  - Criterios de aceptación en formato Gherkin
-  - Información recopilada del negocio
-  - Análisis de documentación arquitectónica existente
-  - Referencias a componentes y flujos relacionados
-
-**📋 Estado:** `Borrador (PO)` - Lista para análisis arquitectónico
-
-**✅ Proceso:** Análisis de requerimientos → Consulta documentación arquitectónica → Elicitación → Historia completa
-
----
-
-## 🏗️ **FASE 3: ANÁLISIS Y DISEÑO ARQUITECTÓNICO**
-
-### **Agente: Arquitecto (Architect)**
-
-#### **Paso 3.1: Analizar y Diseñar Arquitectura de Historia**
-
-```bash
-architect *analisis-y-diseno {número}
-```
-
-**📄 Propósito:** Analizar la historia desde perspectiva arquitectónica, tomar decisiones de diseño y proponer implementación validada por arquitecto humano.
-
-**📦 Entregables:**
-
-- **Archivo actualizado:** `docs/stories/{número}.story.md`
-- **Contenido añadido:**
-  - Análisis arquitectónico completo basado en documentación existente
-  - Decisiones de diseño validadas por arquitecto humano
-  - Especificación de componentes y modificaciones requeridas
-  - Estrategia de implementación y flujo de integración
-  - Identificación de riesgos arquitectónicos
-  - Referencias a decisiones similares en historias previas
-
-**📋 Estado:** `Analizado (Arquitecto)` - Lista para refinamiento técnico
-
-**✅ Proceso:** Análisis de impacto → Propuesta de diseño → **Validación humana obligatoria** → Decisiones documentadas
-
----
-
-## 🔧 **FASE 4: REFINAMIENTO TÉCNICO**
-
-### **Agente: Desarrollador (Developer)**
-
-#### **Paso 4.1: Refinar Historia de Usuario**
-
-```bash
-dev *refinamiento-tecnico {número}
-```
-
-**📄 Propósito:** Enriquecer la historia con contexto técnico profundo usando decisiones arquitectónicas como base, y descomponer en tareas ejecutables.
-
-**📦 Entregables:**
-
-- **Archivo actualizado:** `docs/stories/{número}.story.md`
-- **Contenido añadido:**
-  - Descomposición técnica basada en análisis arquitectónico (si existe)
-  - Tareas de implementación específicas organizadas por fases
-  - Análisis de historias refinadas similares
-  - Contexto técnico complementario al diseño arquitectónico
-  - Análisis de riesgos técnicos e impacto
-  - Checklist de actualización documental
-
-**📋 Estado:** `Refinado (Dev)` - Lista para estimación
-
-**✅ Proceso:** Uso de decisiones arquitectónicas → Análisis técnico complementario → Descomposición en tareas → Historia lista para desarrollo
-
----
-
-## 📊 **FASE 5: ESTIMACIÓN**
-
-### **Agente: Desarrollador (Developer)**
-
-#### **Paso 5.1: Estimar Historia de Usuario**
-
-```bash
-dev *estimar-historia-usuario {número}
-```
-
-**📄 Propósito:** Realizar estimación fundamentada basada en complejidad técnica y análisis de riesgos.
-
-**📦 Entregables:**
-
-- **Archivo actualizado:** `docs/stories/{número}.story.md`
-- **Contenido añadido:**
-  - Estimación en story points
-  - Justificación de la estimación
-  - Análisis de complejidad por dimensiones
-  - Identificación de riesgos
-
-**📋 Estado:** `Estimado (Dev)` - Lista para desarrollo
-
----
-
-## 💻 **FASE 6: DESARROLLO**
-
-### **Agente: Developer (Dev)**
-
-#### **Paso 6.1: Implementar Historia de Usuario**
-
-```bash
-dev *desarrollar-historia-usuario {número}
-```
-
-**📄 Propósito:** Implementar la funcionalidad siguiendo los estándares documentados y patrones arquitectónicos establecidos.
-
-**📦 Entregables:**
-
-- **Código implementado** según especificaciones y estándares
-- **Pruebas unitarias e integración** completas
-- **Archivo actualizado:** `docs/stories/{número}.story.md`
-- **Secciones actualizadas:**
-  - Checkboxes de tareas completadas
-  - Dev Agent Record con detalles de implementación
-  - File List con archivos modificados/creados
-  - Change Log con cambios realizados
-- **Documentación actualizada** (según checklist de tareas):
-  - GPS arquitectónico si hay nuevos componentes
-  - Documentación de componentes modificados
-  - Flujos de negocio actualizados si aplica
-
-**📋 Estado:** `Implementado (Dev)` - Listo para revisión
-
-**✅ Proceso:** Implementación por fases → Pruebas → Validaciones → Actualización documental → Historia completada
-
----
-
-## 🧪 **FASE 7: REVISIÓN DE CALIDAD**
-
-### **Agente: Peer Reviewer**
-
-#### **Paso 7.1: Revisar Código y Arquitectura**
-
-```bash
-peer-reviewer  *revisar-historia {número}
-```
-
-**📄 Propósito:** Realizar revisión integral de calidad incluyendo código, arquitectura, pruebas y cumplimiento de estándares.
-
-**📦 Entregables:**
-
-- **Archivo actualizado:** `docs/stories/{número}.story.md`
-  - Sección QA Results con resultados de revisión
-- **Archivo de decisión:** `docs/qa/gates/{epic}.{story}-{slug}.yml`
-- **Decisiones posibles:**
-  - ✅ **PASS** - Cumple todos los criterios de calidad
-  - ⚠️ **CONCERNS** - Tiene observaciones pero puede continuar
-  - ❌ **FAIL** - Requiere correcciones antes de continuar
-  - 🔄 **WAIVED** - Exenciones justificadas aprobadas
-
-**📋 Estado:** `Revisado (QA)` - Según decisión del gate
-
-**✅ Análisis incluye:**
-
-- Trazabilidad de requisitos
-- Evaluación de riesgos
-- Arquitectura de pruebas
-- Cumplimiento de NFRs (Non-Functional Requirements)
-- Adherencia a estándares documentados
-- Calidad del código y testabilidad
-
-**🔄 Siguiente paso:** Si la revisión identifica correcciones necesarias (estado FAIL o CONCERNS), el flujo retorna al Desarrollador para implementar los ajustes antes de la aprobación final.
-
----
-
-## 🔧 **FASE 8: CORRECCIONES POST-REVISIÓN**
-
-### **Agente: Desarrollador (Developer)**
-
-#### **Paso 8.1: Implementar Correcciones**
-
-```bash
-dev *desarrollar-historia-usuario {número}
-```
-
-**📄 Propósito:** Implementar las correcciones y ajustes identificados durante la revisión de calidad.
-
-**📦 Entregables:**
-
-- **Código corregido** según observaciones del Peer Reviewer
-- **Pruebas actualizadas** si es necesario
-- **Archivo actualizado:** `docs/stories/{número}.story.md`
-- **Secciones actualizadas:**
-  - Correcciones implementadas documentadas
-  - Change Log con ajustes realizados
-
-**📋 Estado:** `Corregido (Dev)` - Listo para re-revisión
-
-**✅ Proceso:** Análisis de observaciones → Implementación de correcciones → Validación → Retorno a revisión de calidad
-
-**🔄 Ciclo iterativo:** El proceso de revisión y corrección puede repetirse hasta que la historia cumpla todos los criterios de calidad (estado PASS).
-
----
-
-## 🔄 **MIGRACIONES**
-
-Las migraciones son procesos especiales que requieren un enfoque diferente dependiendo de su naturaleza y complejidad.
-
-Es fundamental identificar desde la fase comercial la arquitectura TO-BE, los indicadores KPI de éxito del proceso de migración, drivers de arquitectura que se deben garantizar y así mismo los adicionales que se deben de ejecutar en esta migración como por ejemplo: migrar pruebas existentes, nuevas pruebas unitarias, resolver deuda técnica, garantizar un porcentaje de cobertura, nuevas pruebas de integración, nuevas pruebas de carga, nuevas pruebas funcionales automatizadas, nuevas pruebas de seguridad. 
-
-Recordar que migrar no necesariamente debe de tener los adicionales anteriores y deben ser claramente identificados y estimados en la fase de pivotes en caso de aplicar. 
-
-En caso de no aplicar adicionales tener presente que es perfectamente valido según el proceso de desarrollo de ceiba no tener en estos casos sonar, quality gate y revisiones par con todo el proceso de calidad de la compañia. Es vital dejarlo claro desde la entrega comercial.
+En caso de no aplicar adicionales tener presente que es perfectamente válido según el proceso de desarrollo de Ceiba no tener en estos casos sonar, quality gate y revisiones par con todo el proceso de calidad de la compañía. Es vital dejarlo claro desde la entrega comercial.
 
 **Principios clave de migración:**
 
-- **Plan de pruebas:** Definir estrategia de validación incremental por cada entregable, es decir debemos definir la forma para asegurar la calidad de cada entregable en el origen/destino y los data sets de pruebas para lograr esto, sino se tiene una estrategia clara de pruebas la migración será inviable. 
+- **Plan de pruebas**: Definir estrategia de validación incremental por cada entregable, es decir debemos definir la forma para asegurar la calidad de cada entregable en el origen/destino y los data sets de pruebas para lograr esto, sino se tiene una estrategia clara de pruebas la migración será inviable.
 
-Algunos ejemplos: Hacer ingenieria inversa para sacar pruebas ejecutables en insomnia de los endpoint origen para ejecutarlos posteriormente en el destino, definir desde el inicio del proyecto si se debe detener un qa de parte del cliente/ceiba para que certifique cada camino posible.
-- **Despliegue incremental:** Establecer plan de releases graduales con validación en producción
-- **Evitar Big Bang:** Siempre que sea posible, priorizar entregas incrementales sobre despliegues masivos
-- **Rollback controlado:** Garantizar capacidad de reversión sin afectar el sistema completo
+  Algunos ejemplos: Hacer ingeniería inversa para sacar pruebas ejecutables en insomnia de los endpoint origen para ejecutarlos posteriormente en el destino, definir desde el inicio del proyecto si se debe detener un QA de parte del cliente/Ceiba para que certifique cada camino posible.
 
----
+- **Despliegue incremental**: Establecer plan de releases graduales con validación en producción
+- **Evitar Big Bang**: Siempre que sea posible, priorizar entregas incrementales sobre despliegues masivos
+- **Rollback controlado**: Garantizar capacidad de reversión sin afectar el sistema completo
 
-## 🔧 **FASE 1: MIGRACIÓN NO PIVOTABLE**
+#### 🔀 Tipo 1: Migración NO Pivotable
 
-### **¿Qué es una Migración No Pivotable?**
+**Definición**: Migración donde NO es posible identificar pivotes claros de migración.
 
-Una **migración no pivotable** es aquella donde no es posible identificar pivotes claros de migración. Ejemplos comunes incluyen:
-
-- Actualizaciones de versiones de frameworks o lenguajes
+**Ejemplos comunes**:
+- Actualizaciones de versiones de frameworks o lenguajes (Java 7 → 11)
 - Desacoplamiento de librerías legadas
-- Cambios tecnológicos sin ruta de migración incremental clara
-- Refactorizaciones masivas sin puntos intermedios identificables
+- Cambios tecnológicos sin ruta incremental clara (Spring Boot 2.0 → 3.0)
+- Refactorizaciones masivas sin puntos intermedios
 
-### **Estimación**
+**Estimación**: Por juicio experto del equipo técnico
 
-La estimación de esta estrategia se realiza a **juicio experto** basándose en la experiencia del equipo técnico. Si no se tiene una idea clara del esfuerzo o alcance, se recomienda utilizar la tarea del arquitecto `*explorar-proyecto` para apoyarse en la toma de decisión y obtener un análisis profundo que facilite la estimación.
+##### Proceso Recomendado
 
-### **Proceso Recomendado**
+| Fase | Agente | Comando | Actividad |
+|------|--------|---------|-----------|
+| **1. Exploración** | Arquitecto | `architect *explorar-proyecto` | Analizar código, identificar riesgos, evaluar alternativas, definir estrategia |
+| **2. Documentación** | Arquitecto | Manual | Generar `docs/architecture/migration/estrategia-migracion.md` |
+| **3. Historias** | PO | `po *escribir-historia` | Crear historias de usuario técnicas |
+| **4-8. Ejecución** | Todos | Flujo normal | Seguir fases 3-8 del Flujo de Desarrollo |
 
-#### **Paso 1.1: Exploración y Análisis con IA**
+**Ejemplo de prompt para exploración**:
 
-```bash
-architect *explorar-proyecto
+```
+Necesito hacer una actualización tecnológica actualizando las versiones de 
+Java de la versión 7 a la 11 y Spring Boot de 2.0 a 3.0.
+
+Ayúdame a:
+1. Hacer un análisis de impacto de dicha tarea
+2. Proponer una estrategia concreta de migración
+3. Identificar una secuencia de pasos para dividir en historias de usuario técnicas
+
+Documenta el análisis en: docs/architecture/migration/estrategia-migracion.md
 ```
 
-**📄 Propósito:** Utilizar el agente Arquitecto con la tarea de exploración-proyecto para analizar el código existente y, junto con la IA, identificar alternativas y estrategias para ejecutar la migración.
+#### 🎯 Tipo 2: Migración Pivotable
 
-**📦 Actividades:**
+**Definición**: Migración donde ES posible identificar pivotes claros que permiten transformación incremental.
 
-- Análisis profundo del código actual y dependencias
-- Identificación de riesgos y puntos críticos
-- Evaluación de alternativas de migración
-- Definición de estrategia de migración incremental (si es posible)
-- Documentación de decisiones arquitectónicas
+**Ejemplos de pivotes técnicos**:
+- 🌐 **Endpoints REST/API**: Migración endpoint por endpoint
+- 🖥️ **Vistas/Páginas**: Migración de interfaz vista por vista
+- 🗄️ **Procedimientos almacenados**: Migración de lógica de BD
+- ⏰ **Tareas programadas/Jobs**: Migración de procesos batch
+- 📡 **Event handlers**: Migración de procesadores de eventos
 
-**� Ejemplo de prompt para ejecutar en la tarea explorar-proyecto del agente arquitecto recordar reemplazarlo con su necesidad puntual:**
+**Casos de uso comunes**:
+- Monolito → Microservicios
+- Angular → React
+- JSF → Angular
+- .NET Framework → .NET Core
 
-"Necesito hacer una actualización tecnológica en mi sistema actualizando las versiones de java de la versión 7 a la 11 y así mismo las versiones de spring boot de la 2.0 a la 3.0.
+**Características clave**:
+- ✅ Unidades identificables e independientes
+- ✅ Migración incremental sin big bang
+- ✅ Validación por pivote
+- ✅ Rollback granular
+- ✅ Coexistencia sistema legacy y nuevo
 
-Ayudame a hacer un análisis de impacto de dicha tarea, ayudame con una estrategia concreta de migración y ayudame a identificar una secuencia de pasos que me permita posteriormente dividir esta tarea en pequeñas historias de usuario técnicas.
+##### Proceso Recomendado
 
-Deja todo este análisis en la ruta docs/architecture/migration/estrategia-migracion.md
-"
+| Fase | Agente | Comando | Actividad | Entregable |
+|------|--------|---------|-----------|------------|
+| **1. Inventario** | Arquitecto | `architect *explorar-proyecto` | Catalogar todos los pivotes con clasificación | `docs/architecture/migration/pivotes-inventario.md` |
+| **2. Estimación** | Arquitecto + Dev | Manual | Migrar 3 pivotes representativos (baja/media/alta complejidad) y medir tiempos | Estimación empírica del proyecto |
+| **3. Arquitectura TO-BE** | Arquitecto | `architect *crear-arquitectura` | Documentar arquitectura objetivo | `docs/architecture/migration/arquitectura-to-be.md` |
+| **4. Historias por pivote** | PO | `po *escribir-historia` | Crear historia por pivote o grupo de pivotes | Historia por cada pivote |
+| **5-9. Ejecución** | Todos | Flujo normal | Seguir fases 3-8 del Flujo de Desarrollo por cada pivote | Pivotes migrados incrementalmente |
 
+**Ejemplo de prompt para inventario**:
 
-
-**📊 Entregables:**
-
-- **Archivo:** `docs/architecture/migration/estrategia-migracion.md`
-- Análisis de impacto de la migración
-- Propuesta de estrategia de migración
-- Identificación de historias de usuario para la implementación
-
-#### **Paso 1.2: Creación de Historias de Migración**
-
-```bash
-po *escribir-historia
 ```
+¿Qué es un pivote? Es un punto de entrada que sea una unidad funcional 
+lo más independiente posible. Ejemplos: endpoint, tarea programada, vista, 
+procedimiento almacenado.
 
-**📄 Propósito:** Una vez identificada la estrategia de migración, utilizar el agente Product Owner para crear las **historias de usuario técnicas** que implementarán la migración de forma estructurada.
-
-**📦 Proceso:**
-
-1. Convertir la estrategia de migración en historias ejecutables técnicas
-2. Priorizar las historias según dependencias y riesgos
-3. Seguir el flujo normal del Método Ceiba para cada historia:
-   - Análisis y Diseño (Arquitecto)
-   - Refinamiento Técnico (Desarrollador)
-   - Estimación (Desarrollador)
-   - Desarrollo (Desarrollador)
-   - Revisión de Calidad (Peer Reviewer) Solo en caso de que la migración incluya adicionales como deuda técnica, cobertura, etc.
-   - Correcciones Post-Revisión (Desarrollador) - *Ciclo iterativo hasta aprobación*
-
-**✅ Beneficios de este enfoque:**
-
-- Aprovecha la IA para identificar estrategias de migración no evidentes
-- Mantiene la trazabilidad y documentación del proceso
-- Permite validación incremental y reducción de riesgos
-- Genera documentación viva del proceso de migración
-
----
-
-## 🎯 **FASE 2: MIGRACIÓN PIVOTABLE**
-
-### **¿Qué es una Migración Pivotable?**
-
-Una **migración pivotable** es aquella donde es posible identificar pivotes claros de migración que permiten una transformación incremental y estructurada del sistema. 
-
-**Ejemplos de pivotes técnicos:**
-
-- **Endpoints REST/API:** Migración endpoint por endpoint
-- **Vistas/Páginas:** Migración de interfaz vista por vista
-- **Procedimientos almacenados:** Migración de lógica de base de datos
-- **Tareas programadas/Jobs:** Migración de procesos batch o schedulers
-- **Escuchadores de mensajes/Event handlers:** Migración de procesadores de eventos
-
-**Casos de uso comunes:**
-
-- **Migración de arquitectura:** De monolito a microservicios
-- **Migración de lenguaje:** De un lenguaje a otro manteniendo la funcionalidad
-- **Migración de framework:** De Angular a React, de JSF a Angular, de ASPX a Angular
-
-### **Características de una Migración Pivotable**
-
-- ✅ **Unidades identificables:** Cada pivote es una unidad funcional independiente
-- ✅ **Migración incremental:** Permite migrar de forma gradual sin big bang
-- ✅ **Validación por pivote:** Cada unidad puede ser probada y validada independientemente
-- ✅ **Rollback controlado:** Posibilidad de revertir pivotes específicos sin afectar el sistema completo
-- ✅ **Coexistencia:** Sistema legacy y nuevo pueden coexistir durante la migración
-
-### **Proceso Recomendado**
-
-#### **Paso 2.1: Inventario y Clasificación de Pivotes**
-
-```bash
-architect *explorar-proyecto
-```
-
-**📄 Propósito:** Identificar y catalogar todos los pivotes de migración del sistema, clasificándolos por tipo, proceso de negocio, complejidad 1-5 y dependencias.
-
-**📦 Actividades:**
-
-- Inventario completo de pivotes (endpoints, vistas, stored procedures, etc.)
-- Clasificación por tipo de pivote
+Estoy migrando este sistema y necesito identificar y catalogar todos los 
+pivotes con:
+- Tipo de pivote
+- Módulo
+- Proceso de negocio
+- Complejidad técnica (escala 1-5)
+- Justificación de la complejidad
+- Riesgos del pivote
 - Análisis de dependencias entre pivotes
-- Evaluación de complejidad técnica por pivote
-- Identificación de riesgos específicos por pivote
-- Priorización de pivotes según valor de negocio y riesgo
 
-**� Prompt sugerido para ejecutar en la tarea explorar-proyecto del agente arquitecto:**
-
-"Que es un pivote? es un punto de entrada que tenga este sistema y que sea una únidad funcional lo mas inpendiente posible, ejemplos de tipos de pivote: endpoint, tarea programada, vista, procedimiento almacenado etc.
-
-Estoy haciendo una migración de este sistema a otras tecnologias y necesito Identificar y catalogar todos los pivotes de migración con la siguiente información: tipo de pivote, modulo, proceso de negocio, complejidad técnica en escala 1-5, justificación de la complejidad técnica, riesgos del pivote en caso de existir y análisis de dependencias entre pivotes.
-
-Ayudame a sacar un invetario completo de pivotes en la ruta docs/architecture/migration/pivotes-inventario.md
-
-Realiza una priorización en el informe según el valor de negocio que observes en los pivotes"
-
-**�📊 Entregables:**
-
-- **Archivo:** `docs/architecture/migration/pivotes-inventario.md`
-
-### **Estimación**
-
-La estimación de una migración pivotable se basa en **mediciones empíricas** mediante la migración completa de pivotes representativos:
-
-**📊 Proceso de Estimación:**
-
-1. **Migración de Pivotes de Referencia:** Migrar completamente tres pivotes representativos:
-   - 1 pivote de **complejidad 1** (baja)
-   - 1 pivote de **complejidad 3** (media)
-   - 1 pivote de **complejidad 5** (alta)
-
-2. **Medición de Tiempo Real:** Registrar el tiempo efectivo que le tomó al equipo migrar cada pivote, incluyendo:
-   - Análisis y diseño
-   - Desarrollo e implementación
-   - Pruebas y validación de que lo migrado si corresponde 100% a lo original.
-
-3. **Extrapolación al Inventario Total:** Con los tiempos medidos, calcular la estimación total del proyecto:
-   - Multiplicar el tiempo de cada nivel de complejidad por la cantidad de pivotes de ese nivel en el inventario
-   - Sumar los tiempos totales para obtener la estimación del proyecto completo
-   - Aplicar factores de ajuste por aprendizaje y mejora continua
-
-**✅ Beneficios de esta estrategia:**
-- Estimación basada en datos reales del proyecto
-- Reduce incertidumbre al medir esfuerzo concreto
-- Permite ajustes tempranos de alcance o recursos
-- Valida viabilidad de la estrategia de migración
-
-#### **Paso 2.2: Definición de Arquitectura TO-BE**
-
-```bash
-architect *explorar-proyecto
-architect *crear-arquitectura
+Genera un inventario completo en: docs/architecture/migration/pivotes-inventario.md
+Prioriza según valor de negocio.
 ```
 
-**📄 Propósito:** Documentar la arquitectura objetivo (TO-BE) que se implementará durante la migración. (Este paso debe ejecutarse solo cuando se necesite una rearquitectura en caso como por ejemplo monolito a microservicios, front legado a angular, etc.)
+##### 📊 Estrategia de Estimación Empírica
 
-**📦 Actividades:**
+**Paso 1**: Seleccionar pivotes representativos
+- 1 pivote de complejidad 1 (baja)
+- 1 pivote de complejidad 3 (media)
+- 1 pivote de complejidad 5 (alta)
 
-- Definición de arquitectura objetivo
-- Documentación de patrones arquitectónicos a aplicar
-- Especificación de tecnologías y frameworks destino
-- Definición de estrategia de coexistencia (Strangler Pattern, Branch by Abstraction, etc.)
-- Establecimiento de NFRs (Non-Functional Requirements) objetivo
+**Paso 2**: Migrar completamente cada pivote midiendo tiempo real de:
+- Análisis y diseño
+- Desarrollo e implementación
+- Pruebas y validación (100% equivalencia con original)
 
-**📊 Entregables:**
+**Paso 3**: Extrapolar al inventario total
+- Multiplicar tiempo de cada nivel por cantidad de pivotes de ese nivel
+- Sumar totales
+- Aplicar factor de aprendizaje y mejora continua
 
-- **Archivo:** `docs/architecture/migration/arquitectura-to-be.md`
-- Documentación de componentes target
-- Patrones de integración entre legacy y nuevo sistema
-- Estrategia de datos y sincronización
-
-#### **Paso 2.3: Creación de Historia de Usuario por Pivote**
-
-```bash
-po *escribir-historia
-```
-
-**📄 Propósito:** Crear una **historia de usuario técnica** específica para cada pivote o grupo de pivotes relacionados, siguiendo la estrategia de migración definida.
-
-**📦 Proceso por Historia:**
-
-1. Seguir el flujo completo del Método Ceiba para cada pivote:
-   - **Análisis y Diseño** (Arquitecto) - Decisiones específicas del pivote
-   - **Refinamiento Técnico** (Desarrollador) - Descomposición de la migración
-   - **Estimación** (Desarrollador) - Esfuerzo específico del pivote
-   - **Desarrollo** (Desarrollador) - Implementación de la migración
-   - **Revisión de Calidad** (Peer Reviewer) - Validación de funcionalidad y calidad - Solo en caso de que la migración incluya adicionales como deuda técnica, cobertura, etc.
-
-### **✅ Beneficios de la Migración Pivotable**
-
-- **Riesgo controlado:** Migración incremental reduce el riesgo de fallos masivos
-- **Validación continua:** Cada pivote se valida independientemente
-- **Feedback rápido:** Detección temprana de problemas arquitectónicos
-- **Flexibilidad:** Posibilidad de ajustar estrategia según aprendizajes
-- **Coexistencia segura:** Sistema legacy y nuevo operan paralelamente
-- **Trazabilidad completa:** Cada pivote tiene su historia documentada
-- **Rollback granular:** Reversión controlada por pivote sin afectar el sistema completo
-
-### **🎯 Comparación: Pivotable vs. No Pivotable**
+#### 🆚 Comparación: Pivotable vs. No Pivotable
 
 | Aspecto | Migración Pivotable | Migración No Pivotable |
 |---------|---------------------|------------------------|
 | **Granularidad** | Unidades funcionales claras | Sistema completo o módulos grandes |
-| **Riesgo** | Bajo - Migración incremental | Alto - Big bang o refactorización masiva |
+| **Riesgo** | 🟢 Bajo - Incremental | 🔴 Alto - Big bang |
 | **Rollback** | Por pivote individual | Todo o nada |
 | **Validación** | Continua por pivote | Al final de la migración |
-| **Coexistencia** | Legacy y nuevo en paralelo | Difícil mantener ambos sistemas |
-| **Ejemplos** | Endpoints, vistas, stored procedures | Actualización de framework, cambio de librería core |
+| **Coexistencia** | Legacy y nuevo en paralelo | Difícil mantener ambos |
+| **Estimación** | Empírica con pivotes de referencia | Juicio experto |
 
 ---
 
+### 3. Flujo de Soporte y Gestión de Incidentes
+
+Este flujo gestiona el ciclo completo de atención a errores e incidentes en producción, desde la recepción hasta la resolución y documentación del conocimiento adquirido.
+
+#### 📊 Diagrama del Flujo
+
+```mermaid
+flowchart TD
+    %% Inicio
+    START["🚨 Incidente<br/>Reportado"]
+    
+    %% Paso 1
+    RECIBIR["PASO 1<br/>📝 Recibir Error<br/>(PO)"]
+    
+    %% Decisión de prioridad
+    DECISION{"Prioridad?"}
+    
+    %% Rama A: P0-P1 (Crítico)
+    DIAG_A["PASO 2A<br/>🏗️ Diagnosticar<br/>(Arquitecto)"]
+    REF_A["PASO 3A<br/>💻 Refinamiento<br/>(Dev)"]
+    DEV_A["PASO 4A<br/>💻 Desarrollo<br/>(Dev)"]
+    QA_A["PASO 5A<br/>🔍 Revisión<br/>(Peer Reviewer)"]
+    POST_A["PASO 6A<br/>🏗️ Post-Mortem<br/>(Arquitecto)"]
+    
+    %% Rama B: P2-P4 (No crítico)
+    DIAG_B["PASO 2B<br/>🏗️ Diagnosticar<br/>(Arquitecto)"]
+    ANAL_B["PASO 3B<br/>🏗️ Análisis/Diseño<br/>(Arquitecto)<br/>OPCIONAL"]
+    REF_B["PASO 4B<br/>💻 Refinamiento<br/>(Dev)"]
+    EST_B["PASO 5B<br/>💻 Estimación<br/>(Dev)<br/>OPCIONAL"]
+    DEV_B["PASO 6B<br/>💻 Desarrollo<br/>(Dev)"]
+    QA_B["PASO 7B<br/>🔍 Revisión<br/>(Peer Reviewer)"]
+    POST_B["PASO 8B<br/>🏗️ Post-Mortem<br/>(Arquitecto)"]
+    
+    %% Fin
+    END["✅ Resuelto y<br/>Documentado"]
+    
+    %% Flujo Principal
+    START --> RECIBIR
+    RECIBIR --> DECISION
+    
+    %% Rama A: P0-P1
+    DECISION -->|"P0-P1<br/>(Crítico)"| DIAG_A
+    DIAG_A --> REF_A
+    REF_A --> DEV_A
+    DEV_A --> QA_A
+    QA_A -->|FAIL| DEV_A
+    QA_A -->|PASS| POST_A
+    POST_A --> END
+    
+    %% Rama B: P2-P4
+    DECISION -->|"P2-P4<br/>(No Crítico)"| DIAG_B
+    DIAG_B --> ANAL_B
+    ANAL_B --> REF_B
+    REF_B --> EST_B
+    EST_B --> DEV_B
+    DEV_B --> QA_B
+    QA_B -->|FAIL| DEV_B
+    QA_B -->|PASS| POST_B
+    POST_B --> END
+    
+    %% Estilos
+    style START fill:#ffebee,stroke:#c62828,stroke-width:3px,color:#000000
+    style RECIBIR fill:#fff3e0,stroke:#ef6c00,stroke-width:2px,color:#000000
+    style DECISION fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,color:#000000
+    
+    %% Rama A (P0-P1) - Rosa
+    style DIAG_A fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#000000
+    style REF_A fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#000000
+    style DEV_A fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#000000
+    style QA_A fill:#e0f2f1,stroke:#00695c,stroke-width:2px,color:#000000
+    style POST_A fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000000
+    
+    %% Rama B (P2-P4) - Verde
+    style DIAG_B fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000000
+    style ANAL_B fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,stroke-dasharray: 5 5,color:#000000
+    style REF_B fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000000
+    style EST_B fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,stroke-dasharray: 5 5,color:#000000
+    style DEV_B fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#000000
+    style QA_B fill:#e0f2f1,stroke:#00695c,stroke-width:2px,color:#000000
+    style POST_B fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000000
+    
+    style END fill:#c8e6c9,stroke:#2e7d32,stroke-width:3px,color:#000000
+```
+
+**Leyenda**:
+- 🔴 Rojo: Incidente reportado
+- 🟠 Naranja: Clasificación inicial
+- 🔵 Azul: Punto de decisión
+- 🔴 Rosa: Flujo crítico P0-P1
+- 🟢 Verde: Flujo normal P2-P4
+- 🔵 Turquesa: Revisión de calidad
+- 🟢 Verde lima: Gestión y monitoreo
+- 🟢 Verde oscuro: Resolución exitosa
+
+#### 🔢 Fases del Flujo de Soporte
+
+##### **FASE 1: Recepción y Clasificación** 📝
+
+**Agente**: Product Owner
+
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 1.1 | `po *recibir-error` | Recibir, clasificar y registrar incidente con prioridad | `docs/incidents/{fecha}-{slug}.incident.md` |
+
+**Clasificación de prioridad**:
+- **P0**: Sistema caído, impacto total, resolución inmediata
+- **P1**: Funcionalidad crítica afectada, impacto alto
+- **P2**: Funcionalidad importante con workaround, impacto medio
+- **P3**: Funcionalidad menor afectada, impacto bajo
+- **P4**: Mejora o issue cosmético, sin impacto funcional
+
+**Estado resultante**: `Clasificado (PO)`
+
+##### **Bifurcación según prioridad**
+
+#### 🚨 Rama A: Incidentes Críticos (P0-P1)
+
+##### **FASE 2A: Diagnóstico de Causa Raíz** 🏗️
+
+**Agente**: Arquitecto
+
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 2A.1 | `architect *diagnosticar` | Aplicar metodología 5 Whys para identificar causa raíz | Incidente con sección de diagnóstico |
+
+**Estado resultante**: `Diagnosticado (Arquitecto)`
+
+##### **FASE 3A: Refinamiento Técnico** 💻
+
+**Agente**: Desarrollador
+
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 3A.1 | `dev *refinamiento-tecnico {número}` | Refinar detalles técnicos de implementación urgente | Incidente con refinamiento técnico |
+
+**Estado resultante**: `Refinado (Dev)`
+
+**⚠️ Nota**: Para P0-P1 el refinamiento es rápido y enfocado, sin estimación formal.
+
+##### **FASE 4A: Implementación de Fix** 💻
+
+**Agente**: Desarrollador
+
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 4A.1 | `dev *desarrollar-historia-usuario {número}` | Implementar solución urgente con tests | Código + Tests + Incidente actualizado |
+
+**Estado resultante**: `Resuelto (Dev)`
+
+**⚠️ Nota**: Para P0-P1 NO se requiere estimación, pero SÍ revisión rápida de peer reviewer antes de despliegue.
+
+##### **FASE 5A: Revisión de Calidad** 🔍
+
+**Agente**: Peer Reviewer
+
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 5A.1 | `peer-reviewer *revisar-historia {número}` | Revisión rápida de calidad y no-regresión | Incidente con QA Results |
+
+**Estado resultante**: `Revisado (QA)`
+
+**⚠️ Nota**: Para P0-P1 la revisión es EXPEDITA enfocada en validar que el fix resuelve el problema sin introducir regresiones críticas. No bloquea despliegue urgente.
+
+**🔄 Si FAIL**: Retorna a Fase 4A para correcciones
+
+##### **FASE 6A: Post-Mortem y KB** 🏗️
+
+**Agente**: Arquitecto
+
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 6A.1 | `architect *documentar-incidente` | Generar post-mortem y evaluar para Knowledge Base | Post-mortem + Índices por categoría y tags |
+
+**Entregables**:
+- `docs/kb/post-mortem/{fecha}-{slug}.md`
+- `docs/kb/index-by-category.md` (actualizado)
+- `docs/kb/index-by-tags.md` (actualizado)
+
+**Estado resultante**: `Documentado (Arquitecto)` ✅
+
+#### 🔧 Rama B: Incidentes No Críticos (P2-P4)
+
+##### **FASE 2B: Diagnóstico de Causa Raíz** 🏗️
+
+**Agente**: Arquitecto
+
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 2B.1 | `architect *diagnosticar` | Aplicar metodología 5 Whys para identificar causa raíz | Incidente con sección de diagnóstico |
+
+**Estado resultante**: `Diagnosticado (Arquitecto)`
+
+##### **FASE 3B: Análisis y Diseño** 🏗️ (OPCIONAL)
+
+**Agente**: Arquitecto
+
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 3B.1 | `architect *analisis-y-diseno {número}` | Analizar arquitectura y diseñar solución (solo si requiere impacto arquitectónico) | Incidente con análisis arquitectónico |
+
+**Estado resultante**: `Analizado (Arquitecto)`
+
+**⚠️ Cuándo ejecutar**: Solo cuando el fix requiere cambios arquitectónicos significativos, impacto en múltiples componentes, o decisiones de diseño complejas. Para fixes simples, saltar directamente a refinamiento.
+
+##### **FASE 4B: Refinamiento Técnico** 💻
+
+**Agente**: Desarrollador
+
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 4B.1 | `dev *refinamiento-tecnico {número}` | Descomponer solución en tareas ejecutables | Incidente con refinamiento técnico |
+
+**Estado resultante**: `Refinado (Dev)`
+
+##### **FASE 5B: Estimación** 💻 (OPCIONAL)
+
+**Agente**: Desarrollador
+
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 5B.1 | `dev *estimar-historia-usuario {número}` | Estimar esfuerzo de la solución | Incidente con estimación |
+
+**Estado resultante**: `Estimado (Dev)`
+
+**⚠️ Nota**: La estimación es opcional para incidentes P2-P4 según políticas del equipo.
+
+##### **FASE 6B: Desarrollo** 💻
+
+**Agente**: Desarrollador
+
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 6B.1 | `dev *desarrollar-historia-usuario {número}` | Implementar solución con pruebas | Código + Tests + Incidente actualizado |
+
+**Estado resultante**: `Implementado (Dev)`
+
+##### **FASE 7B: Revisión de Calidad** 🔍
+
+**Agente**: Peer Reviewer
+
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 7B.1 | `peer-reviewer *revisar-historia {número}` | Validar calidad y no-regresión | Incidente con QA Results |
+
+**Decisiones posibles**: PASS / FAIL / CONCERNS / WAIVED
+
+**Estado resultante**: `Revisado (QA)`
+
+**🔄 Si FAIL**: Retorna a Fase 6B para correcciones
+
+##### **FASE 8B: Post-Mortem y KB** 🏗️
+
+**Agente**: Arquitecto
+
+| Paso | Comando | Propósito | Entregable |
+|------|---------|-----------|------------|
+| 8B.1 | `architect *documentar-incidente` | Generar post-mortem y evaluar para KB | Post-mortem + Índices actualizados |
+
+**Estado resultante**: `Documentado (Arquitecto)` ✅
+
+#### 📊 Gestión y Monitoreo
+
+**Agente**: Product Owner
+
+| Comando | Propósito | Información Mostrada |
+|---------|-----------|----------------------|
+| `po *gestionar-incidentes` | Dashboard de gestión con filtros | - Incidentes por estado<br/>- Incidentes por prioridad<br/>- Estadísticas y tendencias<br/>- Filtros avanzados |
+
+**Uso**: Ejecutar en cualquier momento para consultar el estado de todos los incidentes activos.
+
 ---
 
-## 🚀 **Instalación y Configuración**
+## 🚀 Instalación y Configuración
+
+### Prerrequisitos
+
+- ✅ Node.js v22 o superior instalado
+- ✅ Visual Studio Code (recomendado)
+- ✅ Acceso al repositorio del proyecto
+- ✅ Permisos para ejecutar `npx`
 
 ### Instalación
 
 ```bash
+# Limpiar caché de npm
 npm cache clean --force
+
+# Instalar el Método Ceiba
 npx @ceiba/metodo-ceiba@latest install
+```
+
+El instalador:
+1. Detectará la estructura del proyecto
+2. Instalará los agentes necesarios
+3. Configurará los workflows
+4. Creará la estructura de carpetas inicial
+
+### Verificación de la Instalación
+
+Después de la instalación, verifica que puedes acceder a los agentes:
+
+```bash
+# En el terminal integrado de VS Code
+architect *help
+po *help
+dev *help
+peer-reviewer *help
 ```
 
 ---
 
-## 📂 **Estructura de Archivos Generados**
+## 🎓 Guía de Inicio Rápido
+
+### Escenario 1: Proyecto Nuevo
+
+1. **Documentar arquitectura base**
+   ```bash
+   architect *documentar-arquitectura-base
+   ```
+
+2. **Generar estándares de código**
+   ```bash
+   architect *generar-estandares-codigo
+   ```
+
+3. **Crear primera historia de usuario**
+   ```bash
+   po *escribir-historia
+   ```
+
+4. **Seguir el flujo completo** (fases 3-8)
+
+### Escenario 2: Proyecto Existente
+
+1. **Explorar el proyecto**
+   ```bash
+   architect *explorar-proyecto
+   ```
+
+2. **Documentar componentes clave**
+   ```bash
+   architect *documentar-componente
+   ```
+
+3. **Documentar flujos críticos**
+   ```bash
+   architect *documentar-flujo-negocio
+   ```
+
+4. **Crear historias sobre el sistema existente**
+   ```bash
+   po *escribir-historia
+   ```
+
+### Escenario 3: Migración
+
+1. **Determinar tipo de migración** (Pivotable vs No Pivotable)
+
+2. **Si es NO pivotable**:
+   ```bash
+   architect *explorar-proyecto
+   # Documentar estrategia
+   po *escribir-historia
+   ```
+
+3. **Si es pivotable**:
+   ```bash
+   architect *explorar-proyecto
+   # Generar inventario de pivotes
+   architect *crear-arquitectura
+   # Documentar arquitectura TO-BE
+   po *escribir-historia
+   # Crear historia por pivote
+   ```
+
+### Escenario 4: Incidente en Producción
+
+1. **Recibir y clasificar**
+   ```bash
+   po *recibir-error
+   ```
+
+2. **Si es P0-P1 (crítico)**:
+   ```bash
+   architect *diagnosticar
+   dev *desarrollar-historia-usuario {número}
+   architect *documentar-incidente
+   ```
+
+3. **Si es P2-P4 (no crítico)**: Seguir flujo completo de desarrollo
+
+---
+
+## 📂 Estructura de Archivos
+
+El Método Ceiba genera y organiza la documentación en la siguiente estructura:
 
 ```
 proyecto/
 ├── docs/
-│   ├── architecture/
-│   │   ├── index.md                           # GPS arquitectónico
-│   │   ├── coding-standards.md               # Estándares de desarrollo
-│   │   ├── architecture-{componente}.md      # Documentación de componentes
-│   │   └── flujo-{nombre}.md                # Flujos de negocio
-│   └── stories/
-│       ├── 1.story.md                        # Historia de usuario #1
-│       ├── 2.story.md                        # Historia de usuario #2
-│       └── ...
+│   ├── architecture/                      # GPS Arquitectónico
+│   │   ├── index.md                       # Documento principal de arquitectura
+│   │   ├── coding-standards.md            # Estándares de desarrollo
+│   │   ├── architecture-{componente}.md   # Documentación por componente
+│   │   ├── flujo-{nombre}.md             # Flujos de negocio con diagramas
+│   │   └── migration/                     # Documentación de migraciones
+│   │       ├── estrategia-migracion.md   # Estrategia general (No pivotable)
+│   │       ├── pivotes-inventario.md     # Inventario completo (Pivotable)
+│   │       └── arquitectura-to-be.md     # Arquitectura objetivo (Pivotable)
+│   │
+│   ├── stories/                           # Historias de usuario
+│   │   ├── 1.story.md                    # Historia #1
+│   │   ├── 2.story.md                    # Historia #2
+│   │   └── ...                           # Más historias
+│   │
+│   ├── incidents/                         # Incidentes de soporte
+│   │   ├── 2025-01-15-login-error.incident.md
+│   │   └── ...
+│   │
+│   ├── kb/                                # Knowledge Base
+│   │   ├── post-mortem/                  # Post-mortems documentados
+│   │   │   ├── 2025-01-15-login-error.md
+│   │   │   └── ...
+│   │   ├── index-by-category.md          # Índice por categorías
+│   │   └── index-by-tags.md              # Índice por tags
+│   │
+│   └── qa/                                # Revisiones de calidad
+│       └── gates/                        # Decisiones de quality gates
+│           ├── epic1.story1-feature.yml
+│           └── ...
+│
+└── .ceiba-metodo/                         # Configuración del método (auto-generado)
+    ├── core/
+    ├── metodo-ceiba/
+    └── ...
 ```
+
+### Descripción de Carpetas Principales
+
+| Carpeta | Contenido | Cuándo se genera |
+|---------|-----------|------------------|
+| `docs/architecture/` | GPS Arquitectónico, componentes, flujos | Al documentar arquitectura |
+| `docs/stories/` | Historias de usuario | Al crear historias |
+| `docs/incidents/` | Incidentes reportados | Al recibir errores |
+| `docs/kb/` | Knowledge Base de post-mortems | Al documentar incidentes |
+| `docs/qa/gates/` | Decisiones de revisión de calidad | Al revisar historias |
 
 ---
 
-## 📞 **Soporte**
+## 🛠️ Comandos Disponibles por Agente
 
-Este método es mantenido por Ceiba Software siguiendo los principios del Método Ceiba.
+### 🏗️ Arquitecto (Architect)
+
+| Comando | Descripción | Flujo Asociado |
+|---------|-------------|----------------|
+| `*crear-arquitectura` | Crear arquitectura completa desde requerimientos (proyectos nuevos) | Desarrollo |
+| `*analisis-y-diseno {número}` | Análisis arquitectónico y diseño de historia o incidente | Desarrollo / Soporte |
+| `*documentar-arquitectura-base` | Generar documentación base de arquitectura (proyectos existentes) | Desarrollo |
+| `*documentar-componente` | Documentar componente específico del sistema | Desarrollo |
+| `*documentar-flujo-negocio` | Documentar flujos críticos con diagramas de secuencia | Desarrollo |
+| `*generar-estandares-codigo` | Crear estándares basados en análisis del proyecto | Desarrollo |
+| `*explorar-proyecto` | Explorar y entender cualquier aspecto del proyecto | Todos |
+| `*diagnosticar` | Diagnosticar causa raíz con metodología 5 Whys | Soporte |
+| `*documentar-incidente` | Post-mortem y evaluación para Knowledge Base | Soporte |
+| `*help` | Mostrar ayuda y comandos disponibles | - |
+| `*exit` | Salir del agente | - |
+
+### 📝 Product Owner (PO)
+
+| Comando | Descripción | Flujo Asociado |
+|---------|-------------|----------------|
+| `*escribir-historia` | Crear o importar historias de usuario | Desarrollo |
+| `*recibir-error` | Recibir y clasificar error/incidente | Soporte |
+| `*gestionar-incidentes` | Dashboard de gestión con filtros y estadísticas | Soporte |
+| `*help` | Mostrar ayuda y comandos disponibles | - |
+| `*exit` | Salir del agente | - |
+
+### 💻 Desarrollador (Developer)
+
+| Comando | Descripción | Flujo Asociado |
+|---------|-------------|----------------|
+| `*desarrollar-historia-usuario {número}` | Implementar historia o incidente con testing completo | Desarrollo / Soporte |
+| `*refinamiento-tecnico {número}` | Refinar historia o incidente con contexto técnico | Desarrollo / Soporte |
+| `*estimar-historia-usuario {número}` | Estimar tiempos de desarrollo | Desarrollo / Soporte |
+| `*help` | Mostrar ayuda y comandos disponibles | - |
+| `*exit` | Salir del agente | - |
+
+### 🔍 Peer Reviewer
+
+| Comando | Descripción | Flujo Asociado |
+|---------|-------------|----------------|
+| `*revisar-historia {número}` | Revisar código de historia o incidente completado | Desarrollo / Soporte |
+| `*help` | Mostrar ayuda y comandos disponibles | - |
+| `*exit` | Salir del agente | - |
+
+---
+
+## 📞 Soporte y Comunidad
+
+
+### Contacto
+
+Este método es desarrollado y mantenido por **Ceiba Software** siguiendo los principios del Método Ceiba.
+
+Para consultas, soporte o contribuciones, contacta al equipo de Ceiba Software.
+
+---
+
+## 📝 Notas Finales
+
+### Principios del Método Ceiba
+
+1. **Documentación como código**: La documentación evoluciona junto con el código
+2. **Contexto primero**: Cada decisión se toma con pleno conocimiento del sistema
+3. **Iteración controlada**: Ciclos cortos con validación continua
+4. **Trazabilidad total**: Desde requisitos hasta código hay conexión clara
+5. **Calidad sin negociación**: Gates de calidad obligatorios en el flujo
+6. **Aprendizaje continuo**: Cada iteración mejora el conocimiento del sistema
+
+### Ventajas Competitivas
+
+- ✅ Reduce tiempo de onboarding en 50-70%
+- ✅ Aumenta velocidad de desarrollo sin sacrificar calidad
+- ✅ Mantiene documentación actualizada automáticamente
+- ✅ Facilita auditorías y certificaciones
+- ✅ Mejora estimaciones con datos históricos
+- ✅ Permite escalamiento del equipo sin pérdida de contexto
 
 ---
 
 _Desarrollado con ❤️ por el equipo de Ceiba Software_
+
+**Versión**: 6.0.0  
+**Última actualización**: Noviembre 2025

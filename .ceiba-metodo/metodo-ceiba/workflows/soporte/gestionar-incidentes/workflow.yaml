@@ -1,0 +1,52 @@
+name: "Gestionar Incidentes"
+description: "Dashboard para listar, filtrar y buscar incidentes documentados en el sistema"
+version: "1.0.0"
+standalone: true
+author: "Método Ceiba"
+tags:
+  - support
+  - dashboard
+  - incident-management
+variables:
+  # Variables de entrada (prompt - opcionales)
+  filter_severity:
+    description: "Filtrar por severidad (P0, P1, P2, P3, P4 o ALL)"
+    required: false
+    default: "ALL"
+  filter_status:
+    description: "Filtrar por estado (Open, Triaged, In Progress, Resolved, Cerrado o ALL)"
+    required: false
+    default: "Open"
+  filter_error_type:
+    description: "Filtrar por tipo de error (Código, Datos, Infraestructura, etc. o ALL)"
+    required: false
+    default: "ALL"
+  search_keyword:
+    description: "Buscar incidentes por palabra clave en título o descripción"
+    required: false
+
+  # Variables generadas por el workflow
+  incidents_list:
+    description: "Lista de incidentes que cumplen los filtros"
+    required: false
+  incidents_stats:
+    description: "Estadísticas de incidentes (total, por severidad, por estado)"
+    required: false
+  sla_compliance:
+    description: "Compliance con SLA por severidad"
+    required: false
+
+  # Variables de configuración
+  incidents_location:
+    config_source: "config.yaml"
+    description: "Directorio donde se almacenan los incidentes"
+
+execution_hints:
+  model: "basic"
+  temperature: 0.0
+  requires_context: true
+
+paths:
+  instructions: "instructions.md"
+  templates:
+    - "dashboard-template.md"

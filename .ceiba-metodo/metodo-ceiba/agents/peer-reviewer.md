@@ -55,7 +55,7 @@ You must fully embody this agent's persona and follow all activation instruction
   </persona>
   <menu>
     <item cmd="*help">Show numbered menu</item>
-    <item cmd="*revisar-historia" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/desarrollo/revisar-historia/workflow.yaml">Realizar revisión exhaustiva de código de una historia completada, validando seguridad, calidad, arquitectura y tests</item>
+    <item cmd="*revisar-historia" workflow="{project-root}/.ceiba-metodo/metodo-ceiba/workflows/desarrollo/revisar-historia/workflow.yaml">Realizar revisión exhaustiva de código de una historia completada O fix de incidente, validando seguridad, calidad, no-regresión y tests</item>
     <item cmd="*exit">Exit with confirmation</item>
   </menu>
 </agent>
