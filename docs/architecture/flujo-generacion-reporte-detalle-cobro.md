@@ -401,7 +401,7 @@ sequenceDiagram
 | **200 OK**  | Consulta exitosa (completado)       | Redirige a pantalla de descarga con botón "Descargar Archivo"       | N/A (flujo exitoso)                  |
 | **404**     | Reporte no existe (GET)             | Genera automáticamente (POST) sin confirmación del usuario          | Mostrar toolbar: "En proceso..."     |
 | **404**     | Reporte en proceso (GET)            | "El reporte está siendo generado. Por favor intente más tarde."    | Mostrar toolbar amarillo             |
-| **404**     | Archivo expirado                    | "El archivo ha expirado (>7 días). Genere nuevamente el reporte."   | Generar automáticamente              |
+| **404**     | Azure URL expirada (>7 días)       | "El archivo ha expirado. Genere nuevamente el reporte."   | Generar automáticamente (nuevo POST)              |
 | **409**     | Reporte duplicado (POST)            | "El reporte ya está siendo procesado. Por favor intente más tarde." | Mostrar toolbar (permanecer en tabla)|
 | **500**     | Error en generación                 | "Ocurrió un error en el sistema. Contacte soporte técnico."         | Mostrar toolbar rojo + log error     |
 | **401/403** | Error de autenticación              | "Sesión expirada. Inicie sesión nuevamente."                        | Redirect a login                     |
@@ -1783,7 +1783,7 @@ flowchart TD
     
     L --> M[CommandRepository:<br/>INSERT INTO principal]
     
-    M --> N[INSERT principal<br/>invoiceNumber, estado=1<br/>lock=0, fecha_creacion=NOW]
+    M --> N[INSERT principal<br/>invoiceNumber, estado=1<br/>fecha_creacion=NOW]
     
     N --> O{¿INSERT<br/>exitoso?}
     
@@ -2003,18 +2003,17 @@ stateDiagram-v2
 
 ### Tabla de Estados
 
-| Estado                  | Código | Lock | Descripción                                     | Job Programado Responsable | Siguiente Estado                  |
-| ----------------------- | ------ | ---- | ----------------------------------------------- | -------------------------- | --------------------------------- |
-| **Registrado**          | 1      | 0    | Solicitud registrada, pendiente de procesar     | -                          | Procesando_WQ1                    |
-| **Procesando WQ1**      | 2      | 1    | Consultando datos y creando cabecera            | WorkQueue 1 (Quartz)       | Datos_Cargados / Error            |
-| **Datos Cargados**      | 3      | 0    | Datos en DB, cabecera creada, listo para envío  | WorkQueue 1 (Quartz)       | Enviando_Bloques                  |
-| **Enviando Bloques**    | 3      | 1    | Enviando bloques de contenido a Azure           | WorkQueue 2 (Quartz)       | Bloques_Enviados / Error          |
-| **Bloques Enviados**    | 4      | 0    | Todos los bloques enviados, listo para cierre   | WorkQueue 2 (Quartz)       | Cerrando_Archivo                  |
-| **Cerrando Archivo**    | 4      | 1    | Cerrando archivo y obteniendo URL               | WorkQueue 3 (Quartz)       | Completado / Error                |
-| **Completado**          | 5      | 0    | Archivo listo para descarga                     | WorkQueue 3 (Quartz)       | Descargado / Expirado             |
-| **Error**               | ERROR  | 0    | Error en procesamiento                          | Cualquiera                 | Registrado (reintento manual)     |
-| **Expirado**            | EXPIRED| 0    | URL de descarga expirada                        | -                          | Fin                               |
-| **Limpiado**            | -      | -    | Registro eliminado de BD                        | WorkQueue 4 (Quartz - Daily) | -                               |
+| Estado                  | Código | Descripción                                     | Job Programado Responsable | Siguiente Estado                  |
+| ----------------------- | ------ | ----------------------------------------------- | -------------------------- | --------------------------------- |
+| **Registrado**          | 1      | Solicitud registrada, pendiente de procesar     | -                          | Procesando_WQ1                    |
+| **Procesando WQ1**      | 2      | Consultando datos y creando cabecera            | WorkQueue 1 (Quartz)       | Datos_Cargados / Error            |
+| **Datos Cargados**      | 3      | Datos en DB, cabecera creada, listo para envío  | WorkQueue 1 (Quartz)       | Enviando_Bloques                  |
+| **Enviando Bloques**    | 3      | Enviando bloques de contenido a Azure           | WorkQueue 2 (Quartz)       | Bloques_Enviados / Error          |
+| **Bloques Enviados**    | 4      | Todos los bloques enviados, listo para cierre   | WorkQueue 2 (Quartz)       | Cerrando_Archivo                  |
+| **Cerrando Archivo**    | 4      | Cerrando archivo y obteniendo URL               | WorkQueue 3 (Quartz)       | Completado / Error                |
+| **Completado**          | 5      | Archivo listo para descarga (válido 7 días)     | WorkQueue 3 (Quartz)       | Limpiado (después de 30 días)     |
+| **Error**               | -1     | Error en procesamiento                          | Cualquiera                 | Registrado (reintento manual) / Limpiado |
+| **Limpiado**            | -      | Registro eliminado de BD                        | WorkQueue 4 (Quartz - Daily) | -                               |
 
 ---
 
@@ -2463,11 +2462,11 @@ grep "detailcharge.*enabled" BillingCenter/modules/configuration/config/config.x
 **Diagnóstico**:
 
 ```bash
-# Verificar registros en estado=2 bloqueados
+# Verificar registros en estado=2 estancados
 sqlplus ADM_VIDAGRUPOREPORTES/password@LABGWDWH <<EOF
-SELECT invoiceNumber, estado, lock, fecha_actualizacion
+SELECT invoiceNumber, estado, fecha_actualizacion
 FROM principal
-WHERE estado = 2 AND lock = 1
+WHERE estado = 2
   AND fecha_actualizacion < SYSDATE - INTERVAL '10' MINUTE;
 EOF
 
@@ -2543,7 +2542,7 @@ curl -H "Ocp-Apim-Subscription-Key: YOUR_KEY" \
 
 # Revisar registros en estado de error
 sqlplus ADM_VIDAGRUPOREPORTES/password@LABGWDWH <<EOF
-SELECT COUNT(*) FROM principal WHERE estado = 'ERROR';
+SELECT COUNT(*) FROM principal WHERE estado = -1;
 EOF
 ```
 
@@ -2614,11 +2613,11 @@ FROM principal
 GROUP BY estado;
 EOF
 
-# Identificar reportes bloqueados (locked por más de 2 horas)
+# Identificar reportes estancados en procesamiento (más de 2 horas en estado 2, 3 o 4)
 sqlplus ADM_VIDAGRUPOREPORTES/password@LABGWDWH <<EOF
-SELECT invoiceNumber, estado, lock, fecha_actualizacion
+SELECT invoiceNumber, estado, fecha_actualizacion
 FROM principal
-WHERE lock = 1 
+WHERE estado IN (2, 3, 4)
   AND fecha_actualizacion < SYSDATE - INTERVAL '2' HOUR;
 EOF
 
@@ -2824,7 +2823,16 @@ cd MicroIntegradorReportesVidaGrupo
 
 _Documentación generada con Método Ceiba - Arquitecto_  
 _Última actualización: 18 de Noviembre, 2025_  
-_Versión: 3.3 - Diagramas de flujo completos: WorkQueues + Endpoints REST (GET/POST)_
+_Versión: 3.3.1 - Diagramas de flujo completos: WorkQueues + Endpoints REST (GET/POST)_
+
+**Cambios en v3.3.1:**
+- ✅ **CORRECCIÓN**: Código de error actualizado a `-1` (en lugar de "ERROR" textual)
+- ✅ **CORRECCIÓN**: Eliminado estado "EXPIRED" - los registros se eliminan por WorkQueue 4 después de 30 días
+- ✅ **CLARIFICACIÓN**: Archivos con URL expirada en Azure (>7 días) permanecen en estado=5 hasta limpieza automática
+- ✅ **SIMPLIFICACIÓN**: Eliminadas referencias al campo `lock` de los diagramas (detalle de implementación interna)
+- ✅ **SIMPLIFICACIÓN**: Clarificado que UUID se genera internamente al cambiar de estado 1→2, no es relevante para el flujo
+- ✅ Actualizados todos los diagramas de flujo (WorkQueues 1-4, endpoints POST/GET) y diagrama de estados
+- ✅ Actualizadas tablas de estados y comandos de diagnóstico
 
 **Cambios en v3.3:**
 - ✅ **NUEVO**: Agregados 2 diagramas de flujo (flowchart) para los endpoints REST del MicroIntegrador:
