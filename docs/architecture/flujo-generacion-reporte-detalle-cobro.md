@@ -1748,6 +1748,205 @@ flowchart TD
 
 ---
 
+### Endpoint POST: Generación de Reporte (Command)
+
+**URL**: `POST /v1/he/invoices/{invoiceNumber}/chargedetail/report`  
+**Clase Route**: `GenerateDetailChargeRoute.java`  
+**Procesador principal**: `GenerateDetailChargeProcessor`  
+**Servicio de dominio**: `GenerateDetailChargeService`
+
+```mermaid
+flowchart TD
+    Start([HTTP POST Request<br/>BillingCenter/Otro Cliente]) --> A[RestApiRoute:<br/>Recibir POST request]
+    
+    A --> B[Extraer invoiceNumber<br/>del path parameter]
+    
+    B --> C[GenerateDetailChargeRoute:<br/>Redirigir a processor]
+    
+    C --> D[GenerateDetailChargeProcessor:<br/>Iniciar procesamiento]
+    
+    D --> E{¿invoiceNumber<br/>válido?}
+    
+    E -->|No - null/empty| F[IllegalArgumentException]
+    F --> G[HTTP 400 Bad Request<br/>message: Invoice number missing]
+    G --> End1([Response al cliente])
+    
+    E -->|Sí| H[GenerateDetailChargeService:<br/>Llamar a QueryPort]
+    
+    H --> I[DetailChargePrincipalQuery:<br/>findStatusByInvoiceNumber]
+    
+    I --> J[QueryRepository:<br/>SELECT estado FROM principal]
+    
+    J --> K{¿Registro<br/>existe?}
+    
+    K -->|No - status=0| L[CommandPort:<br/>createNewInvoice]
+    
+    L --> M[CommandRepository:<br/>INSERT INTO principal]
+    
+    M --> N[INSERT principal<br/>invoiceNumber, estado=1<br/>lock=0, fecha_creacion=NOW]
+    
+    N --> O{¿INSERT<br/>exitoso?}
+    
+    O -->|Sí| P[HTTP 201 Created<br/>message: Record is created]
+    P --> End2([Response al cliente])
+    
+    O -->|No - SQLException| Q[Log error:<br/>Error inserting record]
+    Q --> R[HTTP 500 Internal Server Error<br/>message: Internal server error + exception]
+    R --> End3([Response al cliente])
+    
+    K -->|Sí - status=5 ENVIADO| S[InvoiceSentException]
+    S --> T[HTTP 200 OK<br/>message: Record with send status<br/>Reporte ya completado]
+    T --> End4([Response al cliente])
+    
+    K -->|Sí - status=1,2,3,4| U[InvoiceAlreadyProcessingException]
+    U --> V[HTTP 202 Accepted<br/>message: Record with other status<br/>En procesamiento]
+    V --> End5([Response al cliente])
+    
+    K -->|Sí - status desconocido| W[IllegalStateException]
+    W --> X[HTTP 500 Internal Server Error<br/>message: Other status + code]
+    X --> End6([Response al cliente])
+    
+    style Start fill:#e1f5ff
+    style End1 fill:#f8d7da
+    style End2 fill:#d4edda
+    style End3 fill:#f8d7da
+    style End4 fill:#d1ecf1
+    style End5 fill:#fff3cd
+    style End6 fill:#f8d7da
+    style N fill:#cce5ff
+    style J fill:#fff3cd
+```
+
+**Códigos de Respuesta HTTP**:
+- **201 Created**: Nueva solicitud registrada exitosamente (estado=1)
+- **200 OK**: Reporte ya completado anteriormente (estado=5)
+- **202 Accepted**: Reporte ya está siendo procesado (estado=1,2,3,4)
+- **400 Bad Request**: invoiceNumber faltante o inválido
+- **500 Internal Server Error**: Error en BD o estado desconocido
+
+**Transición de Estados**:
+- **Antes**: No existe registro (status=0)
+- **Después**: Registro creado con estado=1 (Registrado), lock=0
+- **WorkQueue responsable**: WorkQueue 1 procesará este registro en la siguiente ejecución
+
+---
+
+### Endpoint GET: Consulta de Reporte (Query)
+
+**URL**: `GET /v1/he/invoices/{invoiceNumber}/chargedetail/report`  
+**Clase Route**: `GetDetailChargeRoute.java`  
+**Procesadores principales**: `GetDetailChargeProcessor`, `ResponseConsumeMassiveGetFIleProcessor`  
+**Servicios de dominio**: `GetDetailChargeValidationService`, `GetFileResponseService`
+
+```mermaid
+flowchart TD
+    Start([HTTP GET Request<br/>BillingCenter/Otro Cliente]) --> A[RestApiRoute:<br/>Recibir GET request]
+    
+    A --> B[Extraer invoiceNumber<br/>del path parameter]
+    
+    B --> C[GetDetailChargeRoute:<br/>Redirigir a processor]
+    
+    C --> D[GetDetailChargeProcessor:<br/>Iniciar validación]
+    
+    D --> E[GetDetailChargeValidationService:<br/>Validar invoiceNumber]
+    
+    E --> F{¿invoiceNumber<br/>válido?}
+    
+    F -->|No - null/empty| G[InvalidInputDataException]
+    G --> H[HTTP 400 Bad Request<br/>message: Null invoice number]
+    H --> End1([Response al cliente])
+    
+    F -->|Sí| I[SetHeader:<br/>INVOICE_NUMBER en exchange]
+    
+    I --> J[GenerateRequestProcessor:<br/>Construir request para Azure]
+    
+    J --> K[Obtener principal de BD<br/>para extraer headerID]
+    
+    K --> L{¿Principal<br/>existe?}
+    
+    L -->|No| M[Principal no encontrado]
+    M --> N[HTTP 404 Not Found<br/>message: URL archive not found]
+    N --> End2([Response al cliente])
+    
+    L -->|Sí| O[ConsumeFileProcessor:<br/>Preparar GET a Azure]
+    
+    O --> P[GET Azure API:<br/>/get-archive?headerID=xxx]
+    
+    P --> Q{Respuesta<br/>Azure?}
+    
+    Q -->|200 OK| R[ResponseFileProcessor:<br/>Azure retornó URL]
+    
+    R --> S[GetFileResponseService:<br/>formatResponse con statusCode=200]
+    
+    S --> T[Construir JSON:<br/>urlArchive: azure_download_url]
+    
+    T --> U[HTTP 200 OK<br/>Body: JSON con urlArchive]
+    U --> End3([Response al cliente<br/>Cliente descarga desde Azure])
+    
+    Q -->|404 Not Found| V[Azure: Archivo no existe<br/>o expiró]
+    
+    V --> W[ResponseFileProcessor:<br/>Capturar statusCode=404]
+    
+    W --> X[GetFileResponseService:<br/>formatResponse con statusCode=404]
+    
+    X --> Y[Construir JSON:<br/>message: URL archive not found]
+    
+    Y --> Z[HTTP 404 Not Found<br/>Body: JSON con mensaje]
+    Z --> End4([Response al cliente])
+    
+    Q -->|400 Bad Request| AA[Azure: headerID inválido]
+    AA --> AB[ResponseFileProcessor:<br/>Capturar statusCode=400]
+    AB --> AC[GetFileResponseService:<br/>formatResponse con statusCode=400]
+    AC --> AD[Construir JSON:<br/>message: Bad request]
+    AD --> AE[HTTP 400 Bad Request<br/>Body: JSON con mensaje]
+    AE --> End5([Response al cliente])
+    
+    Q -->|500/Otro| AF[Azure: Error interno]
+    AF --> AG[ResponseFileProcessor:<br/>Capturar statusCode=500]
+    AG --> AH[GetFileResponseService:<br/>formatResponse con statusCode=500]
+    AH --> AI[Construir JSON:<br/>message: Error getting archive]
+    AI --> AJ[HTTP 500 Internal Server Error<br/>Body: JSON con mensaje]
+    AJ --> End6([Response al cliente])
+    
+    Q -->|Exception - Red| AK[Exception de red/timeout]
+    AK --> AL[doCatch: Capturar exception]
+    AL --> AM[SetHeader:<br/>HTTP_RESPONSE_CODE = exception.statusCode]
+    AM --> AN[ResponseFileProcessor:<br/>Manejar error]
+    AN --> AO[HTTP 500 Internal Server Error<br/>message: Error al conectar con Azure]
+    AO --> End7([Response al cliente])
+    
+    style Start fill:#e1f5ff
+    style End1 fill:#f8d7da
+    style End2 fill:#fff3cd
+    style End3 fill:#d4edda
+    style End4 fill:#fff3cd
+    style End5 fill:#f8d7da
+    style End6 fill:#f8d7da
+    style End7 fill:#f8d7da
+    style P fill:#cce5ff
+    style K fill:#fff3cd
+```
+
+**Códigos de Respuesta HTTP**:
+- **200 OK**: Archivo completado, retorna `{ "urlArchive": "https://azure..." }`
+- **404 Not Found**: Reporte no existe, expiró, o está en proceso
+- **400 Bad Request**: invoiceNumber inválido o headerID corrupto
+- **500 Internal Server Error**: Error en Azure o error interno
+
+**Flujo de Datos**:
+1. **Validación**: Verificar invoiceNumber no nulo/vacío
+2. **Consulta BD**: Obtener principal con headerID
+3. **Llamada Azure**: GET a Azure Massive Download API con headerID
+4. **Transformación**: Construir JSON de respuesta basado en statusCode de Azure
+5. **Response**: Retornar JSON al cliente (BillingCenter u otro)
+
+**Interacción con Azure**:
+- Si Azure retorna 200: Cliente descarga directamente desde URL provista
+- Si Azure retorna 404: Reporte no existe o expiró (cliente debe generar nuevamente)
+- Si Azure retorna 500: Error interno de Azure (reintentar más tarde)
+
+---
+
 ## 📊 **Estados y Transiciones**
 
 ### Diagrama de Estados del Flujo
@@ -2625,7 +2824,34 @@ cd MicroIntegradorReportesVidaGrupo
 
 _Documentación generada con Método Ceiba - Arquitecto_  
 _Última actualización: 18 de Noviembre, 2025_  
-_Versión: 3.2 - Diagramas de flujo detallados por WorkQueue con sub-procesos_
+_Versión: 3.3 - Diagramas de flujo completos: WorkQueues + Endpoints REST (GET/POST)_
+
+**Cambios en v3.3:**
+- ✅ **NUEVO**: Agregados 2 diagramas de flujo (flowchart) para los endpoints REST del MicroIntegrador:
+  - **Endpoint POST** (`/v1/he/invoices/{invoiceNumber}/chargedetail/report`): Flujo completo de generación de reporte
+    - Validación de invoiceNumber
+    - Consulta de estado en BD (QueryPort)
+    - Decisiones basadas en estado actual (0, 1-4, 5, desconocido)
+    - Creación de registro vía CommandPort (INSERT con estado=1)
+    - Códigos HTTP: 201 Created, 200 OK, 202 Accepted, 400 Bad Request, 500 Internal Server Error
+  - **Endpoint GET** (`/v1/he/invoices/{invoiceNumber}/chargedetail/report`): Flujo completo de consulta de reporte
+    - Validación de invoiceNumber
+    - Consulta de principal para obtener headerID
+    - Llamada a Azure Massive Download API (GET /get-archive)
+    - Manejo de respuestas de Azure (200, 404, 400, 500)
+    - Transformación de respuesta con GetFileResponseService
+    - Códigos HTTP: 200 OK (con urlArchive), 404 Not Found, 400 Bad Request, 500 Internal Server Error
+- ✅ **DETALLE**: Cada diagrama de endpoint incluye:
+  - Nombres de clases reales: Routes, Processors, Services, Ports, Repositories
+  - Decisiones de negocio con validaciones específicas
+  - Manejo completo de excepciones (IllegalArgumentException, InvoiceSentException, InvoiceAlreadyProcessingException, etc.)
+  - Interacción con Azure API y códigos de respuesta
+  - Transformación de respuestas JSON
+- ✅ **CLARIFICACIÓN**: Documentada separación CQRS en endpoints:
+  - POST: Command (escritura) - Crea nuevos registros en BD
+  - GET: Query (lectura) - Consulta estado y obtiene URL de Azure
+- ✅ **CLARIFICACIÓN**: Explicado flujo de integración BillingCenter → POST/GET → Azure
+- ✅ Mantenida toda la documentación previa de WorkQueues (v3.2) y versiones anteriores
 
 **Cambios en v3.2:**
 - ✅ **NUEVO**: Agregados 5 diagramas de flujo (flowchart) detallados para cada WorkQueue:
