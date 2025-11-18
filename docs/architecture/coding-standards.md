@@ -84,7 +84,7 @@ class MyClass {
 ```
 
 **REGLAS OBLIGATORIAS**:
-- **No dejar líneas vacías al inicio** del archivo
+- **No dejar líneas vacías al inicio** del archivo (antes del package)
 - **No dejar líneas vacías al final** del archivo
 - Agrupar líneas de código de manera lógica (inicialización, operaciones, retorno)
 
@@ -725,6 +725,325 @@ gw.api.web.Scopes.getApplication().put("VehiclePlugin", plugin)
 
 **NOTA**: Analizar costo de instancia vs. costo de memoria (OutOfMemoryError)
 
+### 15. Integraciones Externas
+
+**PREREQUISITO**: Completar curso de Guidewire Integrations antes de implementar integraciones.
+
+#### Integraciones Síncronas (Transaccionales)
+
+**Escenario**: Necesito respuesta en línea del servicio externo para tomar decisiones.
+
+```gosu
+// ✅ CORRECTO - Implementar en una fachada
+class ExternalServiceFacade {
+  private static final String SERVICE_NAME = "external-service"
+  private static final String CACHE_KEY_PREFIX = "ext_service_"
+  
+  /**
+   * Consume servicio externo a través de fachada
+   * @param request - DTO con parámetros requeridos
+   * @returns DTO con respuesta del servicio
+   * @throws BusinessException - Errores de negocio del servicio
+   * @throws TechnicalException - Errores técnicos de comunicación
+   */
+  function callExternalService(request : ExternalServiceRequestDTO) : ExternalServiceResponseDTO {
+    try {
+      // 1. Verificar caché (si aplica)
+      var cachedResponse = checkCache(request)
+      if (cachedResponse != null) {
+        return cachedResponse
+      }
+      
+      // 2. Consumir a través del localizador de servicios (Registry 8)
+      var serviceLocator = ServiceLocator.getInstance()
+      var response = serviceLocator.callService(SERVICE_NAME, request)
+      
+      // 3. Guardar en caché (si aplica)
+      saveToCache(request, response)
+      
+      return response
+      
+    } catch (e : BusinessException) {
+      // Propagar excepción de negocio tal cual
+      throw e
+    } catch (e : TechnicalException) {
+      // Propagar excepción técnica tal cual
+      throw e
+    }
+  }
+  
+  // Implementar circuit breaker con Hystrix
+  @HystrixCommand(fallbackMethod = "callExternalServiceFallback")
+  function callExternalServiceWithCircuitBreaker(request : ExternalServiceRequestDTO) : ExternalServiceResponseDTO {
+    return callExternalService(request)
+  }
+  
+  function callExternalServiceFallback(request : ExternalServiceRequestDTO) : ExternalServiceResponseDTO {
+    // Manejo de failover
+    logger.error(LogMessages.CIRCUIT_BREAKER_ACTIVATED)
+    throw new ServiceUnavailableException(ErrorMessages.SERVICE_TEMPORARILY_UNAVAILABLE)
+  }
+}
+```
+
+**REGLAS OBLIGATORIAS para Integraciones Síncronas**:
+
+1. **Implementar en Fachada**
+   - Recibir objeto DTO con atributos requeridos
+   - NO exponer detalles del servicio externo
+
+2. **Manejo de Excepciones**
+   - Capturar `BusinessException` y propagar tal cual
+   - Capturar `TechnicalException` y propagar tal cual
+   - NO silenciar excepciones
+
+3. **WSDL Import**
+   - Modificar namespace del WSDL antes de importar
+   - Evitar conflictos en la importación
+
+4. **Localizador de Servicios**
+   - SIEMPRE usar `ServiceLocator` (Registry 8 de Sura)
+   - NO hacer llamadas directas a URLs hardcodeadas
+
+5. **Caché (si aplica)**
+   - Analizar si se debe guardar información en caché
+   - Usar librería **Guava** (incluida en Guidewire)
+   - Evitar N llamadas al mismo servicio
+
+6. **Autenticación con Seus4**
+   - Si el servicio requiere autenticación y está en Seus4
+   - Usar usuario nombrado del core
+
+7. **Configuración en WService_Ext**
+   - Registrar parámetros de localización
+   - Registrar nombramiento del servicio
+   - Registrar seguridad (si aplica)
+
+8. **Circuit Breaker (Hystrix)**
+   - Implementar para manejo de failover
+   - Usar en caso de fallos o lentitudes
+   - Definir método fallback apropiado
+   - Ver ejemplo: `FinanceFacade.getPlan()` en PolicyCenter
+
+9. **Pruebas de Integración**
+   - Implementar prueba SOAPUI para la fachada
+   - Usar `com.sura.suite.gw.tester.FacadeTesterAPI`
+   - Incluir en Bitbucket para pipeline CI/CD
+   - Especificar: clase, método, tipo y valor de parámetros
+
+10. **Implementación en Suite (si aplica)**
+    - Si el servicio es de interés general para el CORE
+    - Si puede ser consumido por múltiples módulos GW
+    - Implementar en la suite común
+
+**Ejemplo de Configuración WService_Ext**:
+
+```gosu
+// WService_Ext.gs
+class WService_Ext {
+  // Parámetros de localización
+  static final var EXTERNAL_SERVICE_URL = ScriptParameters.ExternalServiceURL
+  
+  // Nombramiento
+  static final var EXTERNAL_SERVICE_NAME = "ExternalService"
+  
+  // Seguridad (si aplica)
+  static final var EXTERNAL_SERVICE_USER = ScriptParameters.ExternalServiceUser
+  static final var EXTERNAL_SERVICE_PASSWORD = ScriptParameters.ExternalServicePassword
+}
+```
+
+**Ejemplo de Uso de Caché (Guava)**:
+
+```gosu
+uses com.google.common.cache.Cache
+uses com.google.common.cache.CacheBuilder
+uses java.util.concurrent.TimeUnit
+
+class CachedExternalServiceFacade {
+  static var _cache : Cache<String, ExternalServiceResponseDTO> = 
+    CacheBuilder.newBuilder()
+      .maximumSize(1000)
+      .expireAfterWrite(10, TimeUnit.MINUTES)
+      .build()
+  
+  private function checkCache(request : ExternalServiceRequestDTO) : ExternalServiceResponseDTO {
+    var cacheKey = buildCacheKey(request)
+    return _cache.getIfPresent(cacheKey)
+  }
+  
+  private function saveToCache(request : ExternalServiceRequestDTO, response : ExternalServiceResponseDTO) {
+    var cacheKey = buildCacheKey(request)
+    _cache.put(cacheKey, response)
+  }
+  
+  private function buildCacheKey(request : ExternalServiceRequestDTO) : String {
+    return CacheKeyConstants.EXTERNAL_SERVICE_PREFIX + request.RequestId
+  }
+}
+```
+
+#### Integraciones Asíncronas (Desconectadas)
+
+**Escenario**: Consumo desconectado de la transacción de negocio, puede ser asíncrono.
+
+```gosu
+// ✅ CORRECTO - Usar RabbitMQ como message broker
+class AsyncIntegrationPlugin extends MessageTransportPlugin {
+  
+  override function send(message : Message, transformedPayload : String) {
+    // 1. Preparar mensaje
+    var rabbitMessage = prepareRabbitMessage(message, transformedPayload)
+    
+    // 2. Publicar en RabbitMQ
+    var rabbitMQPublisher = RabbitMQPublisher.getInstance()
+    rabbitMQPublisher.publish(rabbitMessage, QueueConstants.EXTERNAL_INTEGRATION_QUEUE)
+    
+    // 3. Loggear envío
+    logger.info(LogMessages.MESSAGE_SENT_TO_QUEUE, 
+                {message.PublicID, QueueConstants.EXTERNAL_INTEGRATION_QUEUE})
+  }
+  
+  private function prepareRabbitMessage(message : Message, payload : String) : RabbitMessage {
+    return new RabbitMessage() {
+      :MessageId = message.PublicID,
+      :Payload = payload,
+      :Timestamp = Date.CurrentDate,
+      :CorrelationId = generateCorrelationId()
+    }
+  }
+}
+```
+
+**REGLAS OBLIGATORIAS para Integraciones Asíncronas**:
+
+1. **Message Broker**
+   - SIEMPRE preferir **RabbitMQ** como message broker
+   - Excepción: si el destino es un web service
+
+2. **Desconexión de Transacción**
+   - Usar **Transport Plugin** para desconectarse de la transacción
+   - NO bloquear la transacción de negocio
+
+3. **Configuración de Colas**
+   - Definir nombres de colas en constantes
+   - Configurar en ScriptParameters
+   - Documentar propósito de cada cola
+
+4. **Manejo de Errores**
+   - Implementar dead letter queue (DLQ)
+   - Loggear envíos y errores
+   - Implementar retry policy
+
+5. **Documentación**
+   - Remitirse a documentación de GW: Integration Guide - Plugins, Messaging
+   - Documentar flujo completo de mensajería
+   - Incluir diagramas de secuencia
+
+**Ejemplo de Configuración de Colas**:
+
+```gosu
+// QueueConstants.gs
+class QueueConstants {
+  static final var EXTERNAL_INTEGRATION_QUEUE = "sura.integration.external.main"
+  static final var EXTERNAL_INTEGRATION_DLQ = "sura.integration.external.dlq"
+  static final var EXTERNAL_INTEGRATION_RETRY_QUEUE = "sura.integration.external.retry"
+}
+```
+
+#### Arquitectura de Integración Síncrona
+
+```text
+┌─────────────────┐
+│   Guidewire     │
+│   (Fachada)     │
+└────────┬────────┘
+         │
+         ├──> 1. Verificar Caché (Guava)
+         │         └─> Si existe, retornar
+         │
+         ├──> 2. Localizador de Servicios (Registry 8)
+         │         └─> Obtener endpoint del servicio
+         │
+         ├──> 3. Circuit Breaker (Hystrix)
+         │         ├─> Llamada al servicio
+         │         └─> Fallback si falla
+         │
+         ├──> 4. Manejo de Excepciones
+         │         ├─> BusinessException → Propagar
+         │         └─> TechnicalException → Propagar
+         │
+         └──> 5. Guardar en Caché (si aplica)
+
+┌─────────────────────────────────────────────┐
+│   Servicio Externo                          │
+│   - Autenticado con Seus4 (si aplica)      │
+│   - Registrado en Registry 8                │
+└─────────────────────────────────────────────┘
+```
+
+#### Arquitectura de Integración Asíncrona
+
+```text
+┌─────────────────┐
+│   Guidewire     │
+│ (Transport      │
+│   Plugin)       │
+└────────┬────────┘
+         │
+         ├──> 1. Preparar Mensaje
+         │
+         ├──> 2. Publicar en RabbitMQ
+         │         ├─> Main Queue
+         │         ├─> Retry Queue (si falla)
+         │         └─> DLQ (si excede reintentos)
+         │
+         └──> 3. Desconectar de Transacción
+
+┌─────────────────────────────────────────────┐
+│   RabbitMQ                                   │
+│   - Exchange: sura.integration               │
+│   - Queue: external.main                     │
+│   - DLQ: external.dlq                        │
+└──────────────┬──────────────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────────────┐
+│   Consumidor / Servicio Externo             │
+└─────────────────────────────────────────────┘
+```
+
+#### Checklist de Integraciones
+
+**Antes de Implementar**:
+- [ ] Curso de Guidewire Integrations completado
+- [ ] Tipo de integración identificado (síncrona/asíncrona)
+- [ ] Servicio registrado en Registry 8 (si aplica)
+- [ ] Requerimientos de caché analizados
+- [ ] Requerimientos de seguridad definidos
+
+**Durante Implementación Síncrona**:
+- [ ] Fachada implementada con DTO
+- [ ] Manejo de excepciones (Business y Technical)
+- [ ] WSDL modificado (namespace)
+- [ ] Localizador de servicios implementado
+- [ ] Caché implementado con Guava (si aplica)
+- [ ] Autenticación Seus4 configurada (si aplica)
+- [ ] WService_Ext configurado
+- [ ] Circuit breaker Hystrix implementado (si aplica)
+- [ ] Prueba SOAPUI creada
+- [ ] FacadeTesterAPI configurado
+- [ ] Pruebas incluidas en Bitbucket
+
+**Durante Implementación Asíncrona**:
+- [ ] Transport Plugin implementado
+- [ ] RabbitMQ configurado
+- [ ] Colas definidas (main, retry, DLQ)
+- [ ] Manejo de errores implementado
+- [ ] Logs de auditoría implementados
+- [ ] Retry policy definida
+- [ ] Documentación de flujo completa
+
 ---
 
 ## 🧪 **ESTÁNDARES DE PRUEBAS UNITARIAS GUIDEWIRE**
@@ -1126,7 +1445,7 @@ public class MicrointegratorMain {
 }
 ```
 
-**REGLA CRÍTICA**: **NO dejar línea en blanco** después de la declaración de clase
+**REGLA CRÍTICA**: **NO dejar línea en blanco** inmediatamente después de la llave de apertura `{` de la declaración de clase (dentro de la clase)
 
 ### 4. Uso de Var (Java 10+)
 
@@ -1264,8 +1583,8 @@ public class MicrointegratorMain {
 ```
 
 **REGLAS OBLIGATORIAS**:
-- **NO línea en blanco** después de la declaración de clase
-- **NO líneas vacías** al inicio del archivo
+- **NO línea en blanco** inmediatamente después de la llave de apertura `{` de la clase (dentro de la clase)
+- **NO líneas vacías** al inicio del archivo (antes del package)
 - **NO líneas vacías** al final del archivo
 
 ---
@@ -1353,12 +1672,15 @@ jacocoTestReport {
 10. **Validar nulos** antes de acceder propiedades
 11. **Filtrar en BD**, no en código
 12. **Plugins en scope estático** o application
+13. **Integraciones síncronas**: Fachada + Localizador + Circuit Breaker
+14. **Integraciones asíncronas**: RabbitMQ + Transport Plugin
+15. **Caché con Guava** para evitar N llamadas a servicios externos
 
 ### Java - Apache Camel
 
 1. **NO usar comentarios** de documentación - código autoexplicativo
 2. **NO usar strings literales** - declarar todas las constantes
-3. **Sin línea en blanco** después de declaración de clase
+3. **Sin línea en blanco** dentro de la clase después de la llave de apertura `{`
 4. **Usar var** cuando el tipo sea obvio
 5. **Lombok** para reducir boilerplate
 6. **Constructor injection** para dependencias
@@ -1418,6 +1740,8 @@ jacocoTestReport {
 - [BillingCenter Developer Guide](guidewire-docs/bc-dev-guide)
 - [ClaimCenter Developer Guide](guidewire-docs/cc-dev-guide)
 - [Gosu Best Practices](guidewire-docs/gosu-best-practices)
+- [Integration Guide - Plugins, Messaging](guidewire-docs/integration-guide)
+- [Circuit Breaker Pattern with Hystrix](guidewire-docs/hystrix-implementation)
 
 ### Documentación Apache Camel
 
@@ -1470,13 +1794,24 @@ jacocoTestReport {
 - [ ] Cobertura > 70%
 - [ ] Sin warnings de CodeNarc
 
+**Integraciones Externas (si aplica)**:
+- [ ] Integraciones síncronas usan Fachada + Localizador de Servicios
+- [ ] Circuit Breaker Hystrix implementado (si aplica)
+- [ ] Excepciones Business/Technical propagadas correctamente
+- [ ] Caché con Guava implementado (si aplica)
+- [ ] WService_Ext configurado con parámetros del servicio
+- [ ] Prueba SOAPUI creada con FacadeTesterAPI
+- [ ] Integraciones asíncronas usan RabbitMQ + Transport Plugin
+- [ ] Colas RabbitMQ configuradas (main, retry, DLQ)
+- [ ] Servicio registrado en Registry 8 de Sura
+
 ### Java Microservicios
 
 - [ ] Código en inglés, comentarios en español
 - [ ] Sin código comentado
 - [ ] Sin comentarios de documentación (código autoexplicativo)
 - [ ] Sin líneas vacías al inicio/final de archivos
-- [ ] Sin línea en blanco después de declaración de clase
+- [ ] Sin línea en blanco dentro de la clase después de `{`
 - [ ] Sin strings literales (usar constantes)
 - [ ] Importaciones estáticas para constantes
 - [ ] Imports organizados correctamente
