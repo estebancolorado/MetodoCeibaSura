@@ -20,11 +20,11 @@ El ecosistema de Vida Grupo cuenta con **documentación arquitectónica exhausti
 | Categoría | Documentos | Líneas | Estado |
 |-----------|------------|--------|--------|
 | **GPS Arquitectónico** | 1 | ~1,800 | ✅ Actualizado |
-| **Arquitectura de Componentes** | 3 | 2,350 | ✅ Completo |
+| **Arquitectura de Componentes** | 4 | ~3,050 | ✅ Completo |
 | **Flujos de Negocio** | 1 | 1,229 | ✅ Documentado |
 | **Historias de Usuario** | 1 | 1,941 | ✅ Caso Estudio |
 | **READMEs de Proyecto** | 2 | 764 | ✅ Actualizados |
-| **TOTAL** | **8** | **~7,834** | **✅ Sincronizado** |
+| **TOTAL** | **9** | **~8,534** | **✅ Sincronizado** |
 
 ### Componentes Principales Documentados
 
@@ -38,7 +38,7 @@ El ecosistema de Vida Grupo cuenta con **documentación arquitectónica exhausti
 - **MicroIntegradorReportesVidaGrupo**: Generación de reportes masivos (1,111 líneas doc + 1,229 líneas flujo)
 
 #### **Infraestructura**
-- **VidaGrupoIAC**: Terraform para Azure (Data Factory, API Gateway)
+- **VidaGrupoIAC**: Terraform para Azure - IaC completo (Documentado)
 
 ### Flujos de Negocio Documentados
 
